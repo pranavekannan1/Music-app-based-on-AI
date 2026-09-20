@@ -516,6 +516,41 @@ export async function detectUserLocation(): Promise<UserLocationInfo> {
 }
 
 /**
+ * Fetch the stable first-party catalog without relying on external providers.
+ */
+export async function getCatalogTracks(query = '', page = 1, limit = 20): Promise<Track[]> {
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      page: String(page),
+      limit: String(limit),
+    });
+    const res = await fetch(`/api/music/catalog?${params.toString()}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.tracks)) {
+        return data.tracks;
+      }
+    }
+  } catch (err) {
+    console.warn('Catalog API fallback:', err);
+  }
+
+  const cleanQuery = query.trim().toLowerCase();
+  const matches = cleanQuery
+    ? VERIFIED_ROYALTY_FREE_TRACKS.filter((track) =>
+        [track.title, track.artist, track.album, track.genre, track.language, ...(track.tags || [])]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(cleanQuery),
+      )
+    : VERIFIED_ROYALTY_FREE_TRACKS;
+  const start = Math.max(0, page - 1) * limit;
+  return matches.slice(start, start + limit);
+}
+
+/**
  * Live alphabet-by-alphabet instant autocomplete suggestions
  */
 export interface SearchSuggestionItem {

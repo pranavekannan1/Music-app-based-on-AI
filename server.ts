@@ -574,6 +574,46 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Stable first-party catalog fallback for offline, unavailable, or empty external searches.
+app.get('/api/music/catalog', (req, res) => {
+  const query = ((req.query.q as string) || '').trim().toLowerCase();
+  const requestedPage = Number.parseInt((req.query.page as string) || '1', 10);
+  const requestedLimit = Number.parseInt((req.query.limit as string) || '20', 10);
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 20;
+
+  const matchingTracks = query
+    ? VERIFIED_ROYALTY_FREE_TRACKS.filter((track) => {
+        const searchableText = [
+          track.title,
+          track.artist,
+          track.album,
+          track.genre,
+          track.language,
+          ...track.tags,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return searchableText.includes(query);
+      })
+    : VERIFIED_ROYALTY_FREE_TRACKS;
+
+  const start = (page - 1) * limit;
+  const tracks = matchingTracks.slice(start, start + limit);
+
+  res.json({
+    success: true,
+    source: 'verified-local-catalog',
+    query,
+    page,
+    limit,
+    total: matchingTracks.length,
+    totalPages: Math.ceil(matchingTracks.length / limit),
+    tracks,
+  });
+});
+
 // Copyright Safety & License Declaration
 app.get('/api/music/copyright-guarantee', (req, res) => {
   res.json({
