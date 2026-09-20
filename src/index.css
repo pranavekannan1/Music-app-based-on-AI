@@ -39,12 +39,18 @@
 }
 
 @layer base {
+  html {
+    min-height: 100%;
+    background: var(--bg-canvas, #121317);
+  }
+
   body {
     font-family: var(--font-body);
     background-color: var(--bg-canvas, #121317);
     color: var(--text-main, #e3e2e8);
     overflow-x: hidden;
     transition: background-color 0.3s ease, color 0.3s ease;
+    padding-bottom: env(safe-area-inset-bottom);
   }
   h1, h2, h3, h4, .font-display {
     font-family: var(--font-display);

@@ -2,24 +2,42 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import CryptoJS from 'crypto-js';
-import { GoogleGenAI } from '@google/genai';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
+
+app.disable('x-powered-by');
 
 app.use(express.json());
 
-// Lazy GoogleGenAI client initialization
-let genAiClient: GoogleGenAI | null = null;
-function getGenAI(): GoogleGenAI | null {
-  if (!genAiClient && process.env.GEMINI_API_KEY) {
-    try {
-      genAiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    } catch (e) {
-      console.warn('Failed to initialize GoogleGenAI:', e);
-    }
+// Groq exposes an OpenAI-compatible chat completions API, so keep the server
+// integration dependency-free and let hosting platforms provide the secret.
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+async function askGroq(prompt: string): Promise<string | null> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+
+  const response = await fetch(GROQ_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.2,
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Groq request failed with status ${response.status}`);
   }
-  return genAiClient;
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || null;
 }
 
 // In-memory cache for fast responsive requests
@@ -959,7 +977,7 @@ app.get('/api/music/suggest', async (req, res) => {
 
 /**
  * AI-Powered Song Discovery Generator
- * Uses Gemini 3.8-flash with Google Search Grounding to dynamically fetch live, real-time blockbuster songs,
+ * Uses Groq to generate dynamic discovery queries for live, real-time blockbuster songs,
  * viral hits, and chart-toppers across languages from active 2025-2026 indices.
  */
 async function generateAiSearchQueries(languageOrRegion: string): Promise<string[]> {
@@ -971,28 +989,13 @@ async function generateAiSearchQueries(languageOrRegion: string): Promise<string
     return cached.data;
   }
 
-  const ai = getGenAI();
-  if (ai) {
+  if (process.env.GROQ_API_KEY) {
     try {
-      // Use premium search grounding tool to locate authentic 2025-2026 hit soundtracks and charts
       const prompt = `Search the live web and find the absolute latest blockbuster songs, top viral single releases, or trending movie soundtracks for "${languageOrRegion}" music right now in 2025/2026. Make sure they are real, actual hit songs currently streaming on Billboard, Spotify, or Indian streaming charts. Return exactly 5 short search queries as a JSON array (e.g. ["Song Title Movie Name", "Singer Trending Song", ...]). No explanation. Only return the JSON.`;
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'ARRAY' as any,
-            items: { type: 'STRING' as any },
-            description: 'List of 5 actual real-life high-trending songs or soundtracks'
-          }
-        }
-      });
+      const response = await askGroq(prompt);
 
-      if (response && response.text) {
-        const rawText = response.text.trim();
+      if (response) {
+        const rawText = response.trim();
         const parsed = JSON.parse(rawText);
         if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
           // Filter to make sure we got valid text queries
@@ -1243,12 +1246,11 @@ app.post('/api/music/ai-refresh', async (req, res) => {
 });
 
 // Dynamic AI Grounded Search to find authentic tracks for recent or upcoming movies (like Bethlehem Kudumba Unit, I Am Game) in 2026/future
-async function discoverTracksWithGeminiGrounding(query: string): Promise<RoyaltyFreeTrack[]> {
-  const ai = getGenAI();
-  if (!ai) return [];
+async function discoverTracksWithGroq(query: string): Promise<RoyaltyFreeTrack[]> {
+  if (!process.env.GROQ_API_KEY) return [];
   try {
     const prompt = `The user is searching for music tracks, albums, or playlists related to: "${query}".
-Use your Google Search tool to find the real, authentic, up-to-date tracklist, songs, or album tracks for this movie/album/song. Especially check for extremely recent releases, trailers, promos, teasers, or lyrical videos if it is a brand-new movie or upcoming release (e.g., in late 2025 or 2026 like "Bethlehem Kudumba Unit", "I Am Game").
+  Use your broad music knowledge to identify real, authentic tracklists, songs, or album tracks for this movie/album/song. Especially identify recent releases, trailers, promos, teasers, or lyrical videos if it is a brand-new movie or upcoming release (e.g., in late 2025 or 2026 like "Bethlehem Kudumba Unit", "I Am Game").
 Identify at least 4 to 10 real songs/tracks associated with this search. For each song, provide:
 1. Exact song title
 2. Primary artist / singers / composers
@@ -1257,31 +1259,10 @@ Identify at least 4 to 10 real songs/tracks associated with this search. For eac
 5. A highly specific YouTube search query that will find this exact track (e.g., "Bethlehem Kudumba Unit [Song Title] lyrical video" or "I Am Game [Song Title] audio").
 Return a JSON array of objects with keys: "title", "artist", "album", "year", "youtubeQuery". Only return raw JSON. No markdown backticks.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'ARRAY' as any,
-          items: {
-            type: 'OBJECT' as any,
-            properties: {
-              title: { type: 'STRING' as any },
-              artist: { type: 'STRING' as any },
-              album: { type: 'STRING' as any },
-              year: { type: 'STRING' as any },
-              youtubeQuery: { type: 'STRING' as any }
-            },
-            required: ['title', 'artist', 'album', 'year', 'youtubeQuery']
-          }
-        }
-      }
-    });
+    const response = await askGroq(prompt);
 
-    if (response && response.text) {
-      const tracksInfo = JSON.parse(response.text.trim());
+    if (response) {
+      const tracksInfo = JSON.parse(response.trim());
       if (Array.isArray(tracksInfo) && tracksInfo.length > 0) {
         // Resolve matching video streams for these tracks in parallel
         const resolvedTracksTasks = tracksInfo.slice(0, 15).map(async (info: any) => {
@@ -1336,7 +1317,7 @@ Return a JSON array of objects with keys: "title", "artist", "album", "year", "y
       }
     }
   } catch (err) {
-    console.error('Error in discoverTracksWithGeminiGrounding:', err);
+    console.error('Error in discoverTracksWithGroq:', err);
   }
   return [];
 }
@@ -1413,11 +1394,11 @@ app.get('/api/music/search', async (req, res) => {
 
     const pidsArray = Array.from(collectedPids);
 
-    // Parallel retrieval from JioSaavn, YouTube scraping, and Gemini Google grounding
+    // Parallel retrieval from JioSaavn, YouTube scraping, and Groq metadata discovery
     const [saavnTracksRes, ytScrapedRes, groundedTracksRes] = await Promise.allSettled([
       pidsArray.length > 0 ? fetchFullSaavnTracks(pidsArray.slice(0, 30)) : Promise.resolve([]),
       scrapeYoutubeTracks(rawQ),
-      discoverTracksWithGeminiGrounding(rawQ)
+      discoverTracksWithGroq(rawQ)
     ]);
 
     let resultTracks: RoyaltyFreeTrack[] = [];
@@ -1588,7 +1569,7 @@ app.get('/api/music/search/grouped', async (req, res) => {
 
     await Promise.allSettled(tasks);
 
-    // Fetch direct JioSaavn songs, YouTube worldwide songs, and Gemini grounded songs in parallel to guarantee 100% availability!
+    // Fetch direct JioSaavn songs, YouTube worldwide songs, and Groq-discovered songs in parallel.
     let directSongs: RoyaltyFreeTrack[] = [];
     let ytTracks: RoyaltyFreeTrack[] = [];
     let groundedTracks: RoyaltyFreeTrack[] = [];
@@ -1596,7 +1577,7 @@ app.get('/api/music/search/grouped', async (req, res) => {
     const [saavnTracksRes, ytScrapedRes, groundedTracksRes] = await Promise.allSettled([
       collectedPids.size > 0 ? fetchFullSaavnTracks(Array.from(collectedPids).slice(0, 30)) : Promise.resolve([]),
       scrapeYoutubeTracks(rawQ),
-      discoverTracksWithGeminiGrounding(rawQ)
+      discoverTracksWithGroq(rawQ)
     ]);
 
     if (saavnTracksRes.status === 'fulfilled') {
@@ -1627,7 +1608,7 @@ app.get('/api/music/search/grouped', async (req, res) => {
       groundedTracks = groundedTracksRes.value;
     }
 
-    // Merge Saavn tracks, YouTube worldwide tracks, and Gemini grounded tracks into directSongs
+    // Merge Saavn tracks, YouTube worldwide tracks, and Groq-discovered tracks into directSongs
     const mergedTracksMap = new Map<string, RoyaltyFreeTrack>();
     groundedTracks.forEach(t => mergedTracksMap.set(t.id, t));
     
@@ -1742,9 +1723,8 @@ app.get('/api/music/search/grouped', async (req, res) => {
     }
 
     if (directSongs.length === 0) {
-      // Use Gemini to procedurally generate a high-fidelity representation of the requested song
-      const ai = getGenAI();
-      if (ai) {
+      // Use Groq to procedurally generate a high-fidelity representation of the requested song
+      if (process.env.GROQ_API_KEY) {
         try {
           const prompt = `The user searched for a song: "${rawQ}". This song was not found in the instant index. Generate the real, authentic metadata for this song.
 Return a JSON object:
@@ -1757,28 +1737,10 @@ Return a JSON object:
   "language": "The real song language"
 }
 Only return raw JSON. No markdown backticks. No explanation.`;
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: prompt,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: 'OBJECT' as any,
-                properties: {
-                  title: { type: 'STRING' as any },
-                  artist: { type: 'STRING' as any },
-                  album: { type: 'STRING' as any },
-                  coverUrl: { type: 'STRING' as any },
-                  genre: { type: 'STRING' as any },
-                  language: { type: 'STRING' as any }
-                },
-                required: ['title', 'artist', 'album', 'coverUrl', 'genre', 'language']
-              }
-            }
-          });
+          const response = await askGroq(prompt);
 
-          if (response && response.text) {
-            const parsed = JSON.parse(response.text.trim());
+          if (response) {
+            const parsed = JSON.parse(response.trim());
             if (parsed && parsed.title) {
               const durSec = 220;
               const cleanCover = parsed.coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80';
@@ -1879,7 +1841,7 @@ app.get('/api/music/playlist', async (req, res) => {
   }
 });
 
-// Query YouTube Video ID from Gemini Search Grounding, with robust regex scraping fallback
+// Query YouTube Video ID with Groq metadata assistance and a robust regex scraping fallback
 app.get('/api/music/youtube-video', async (req, res) => {
   try {
     const title = (req.query.title as string) || '';
@@ -1897,32 +1859,15 @@ app.get('/api/music/youtube-video', async (req, res) => {
     let videoId = '';
     let videoTitle = `${title} - Official Video`;
     let channelName = artist || 'Music Video';
-    let source = 'googleSearch';
+    let source = 'groq';
 
-    const ai = getGenAI();
-    if (ai) {
+    if (process.env.GROQ_API_KEY) {
       try {
         const prompt = `Find the official, exact YouTube music video or video link for "${title}" by "${artist}". Search the web and return ONLY a JSON object containing the exact 11-character YouTube video ID and details. Schema: {"videoId": string, "videoTitle": string, "channelName": string}`;
-        const genRes = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT' as any,
-              properties: {
-                videoId: { type: 'STRING' as any, description: 'The 11-character YouTube video ID' },
-                videoTitle: { type: 'STRING' as any, description: 'The title of the video' },
-                channelName: { type: 'STRING' as any, description: 'Name of the creator/channel' }
-              },
-              required: ['videoId']
-            }
-          }
-        });
+        const genRes = await askGroq(prompt);
 
-        if (genRes && genRes.text) {
-          const cleanText = genRes.text.trim();
+        if (genRes) {
+          const cleanText = genRes.trim();
           const parsed = JSON.parse(cleanText);
           if (parsed.videoId && parsed.videoId.length === 11) {
             videoId = parsed.videoId;
@@ -1935,7 +1880,7 @@ app.get('/api/music/youtube-video', async (req, res) => {
       }
     }
 
-    // Scraper Fallback if Gemini failed or didn't find a valid videoId
+    // Scraper fallback if Groq failed or did not find a valid videoId
     if (!videoId) {
       source = 'scraper';
       const fallbackId = await fetchYoutubeVideoIdFallback(`${title} ${artist} official music video`);
@@ -2175,35 +2120,13 @@ app.get('/api/music/youtube-search', async (req, res) => {
     }
 
     let videos: any[] = [];
-    const ai = getGenAI();
-    if (ai) {
+    if (process.env.GROQ_API_KEY) {
       try {
         const prompt = `Search YouTube for the query "${query}". Extract and return a list of top 6 matching videos with details. Schema: array of objects with videoId, title, author, duration, and thumbnail. Ensure the results are real and accurate.`;
-        const genRes = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'ARRAY' as any,
-              items: {
-                type: 'OBJECT' as any,
-                properties: {
-                  videoId: { type: 'STRING' as any, description: '11-char video ID' },
-                  title: { type: 'STRING' as any },
-                  author: { type: 'STRING' as any },
-                  duration: { type: 'STRING' as any, description: 'e.g. 4:15' },
-                  thumbnail: { type: 'STRING' as any, description: 'Standard high-quality YouTube thumbnail URL' }
-                },
-                required: ['videoId', 'title']
-              }
-            }
-          }
-        });
+        const genRes = await askGroq(prompt);
 
-        if (genRes && genRes.text) {
-          const cleanText = genRes.text.trim();
+        if (genRes) {
+          const cleanText = genRes.trim();
           const parsed = JSON.parse(cleanText);
           if (Array.isArray(parsed) && parsed.length > 0) {
             videos = parsed.map(v => ({
@@ -2217,7 +2140,7 @@ app.get('/api/music/youtube-search', async (req, res) => {
       }
     }
 
-    // Scraper Fallback if Gemini fails or returns empty list
+    // Scraper fallback if Groq fails or returns an empty list
     if (videos.length === 0) {
       try {
         const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
@@ -2374,7 +2297,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
@@ -2382,7 +2305,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`SonicAI 100% Royalty-Free Music Server running on http://0.0.0.0:${PORT}`);
+    console.log(`SonicAI music server listening on port ${PORT}`);
   });
 }
 

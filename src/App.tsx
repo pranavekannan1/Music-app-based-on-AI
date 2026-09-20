@@ -278,7 +278,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-md mx-auto px-4 pt-20 transition-opacity duration-200">
+      <main className="flex-1 w-full max-w-md md:max-w-3xl lg:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-28 transition-opacity duration-200">
         {currentTab === 'home' && (
           <HomeScreen
             onPlayTrack={playTrack}

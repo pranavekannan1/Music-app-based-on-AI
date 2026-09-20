@@ -2,5 +2,5 @@
   "name": "Sonic Music - High-Fidelity Music Streaming & Soundscape Studio",
   "description": "100% copyright-safe and royalty-free Indian & worldwide music streaming platform with authentic Hindustani & Carnatic ragas, priority Indian public service radios, and global Creative Commons audio.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GROQ_API"]
 }

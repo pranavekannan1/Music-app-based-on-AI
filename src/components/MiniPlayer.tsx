@@ -19,8 +19,8 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   progressPercent,
 }) => {
   return (
-    <aside className="fixed bottom-20 inset-x-0 z-40 px-3 sm:px-4 pointer-events-none">
-      <div className="max-w-md mx-auto pointer-events-auto rounded-xl bg-[#292a2e]/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.8),0_0_32px_-8px_rgba(121,40,202,0.35)] overflow-hidden transition-all hover:border-[#dbb8ff]/30">
+    <aside className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] inset-x-0 z-40 px-3 sm:px-4 pointer-events-none">
+      <div className="max-w-md md:max-w-3xl lg:max-w-6xl mx-auto pointer-events-auto rounded-xl bg-[#292a2e]/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.8),0_0_32px_-8px_rgba(121,40,202,0.35)] overflow-hidden transition-all hover:border-[#dbb8ff]/30">
         <div className="p-2.5 sm:p-3 flex items-center justify-between gap-3">
           {/* Track Info Click Target */}
           <div

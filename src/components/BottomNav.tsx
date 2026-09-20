@@ -9,7 +9,7 @@ interface BottomNavProps {
 export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onTabChange }) => {
   return (
     <nav className="fixed bottom-0 inset-x-0 z-50 bg-[#0d0e12]/95 backdrop-blur-2xl border-t border-white/[0.06] shadow-[0_-4px_24px_rgba(0,0,0,0.7)]">
-      <div className="flex justify-around items-center h-20 px-2 relative max-w-md mx-auto">
+      <div className="flex justify-around items-center h-20 px-2 pb-[env(safe-area-inset-bottom)] relative max-w-md md:max-w-3xl lg:max-w-6xl mx-auto">
         {/* 1. Home */}
         <button
           onClick={() => onTabChange('home')}

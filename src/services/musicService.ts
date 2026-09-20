@@ -589,7 +589,7 @@ export async function getLatestMovieAlbums(language: string = 'all'): Promise<Mo
 }
 
 /**
- * Retrieve YouTube Video details for a specific track (uses Gemini search grounding + regex scraper fallback)
+ * Retrieve YouTube Video details for a specific track (uses Groq + regex scraper fallback)
  */
 export async function getYouTubeVideoDetails(title: string, artist: string): Promise<{ videoId: string; videoTitle: string; channelName: string } | null> {
   try {

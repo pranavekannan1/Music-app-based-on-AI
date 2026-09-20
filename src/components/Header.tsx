@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onNavigate, onOpenAu
   return (
     <header className="fixed top-0 inset-x-0 z-40 bg-[#0d0e12]/90 backdrop-blur-xl border-b border-white/[0.04] shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition-all">
       {/* Phone Status Bar */}
-      <div className="max-w-md mx-auto px-4 pt-2 pb-1 flex items-center justify-between text-[#cec2d6] text-xs font-medium select-none">
+      <div className="max-w-md md:max-w-3xl lg:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-1 flex items-center justify-between text-[#cec2d6] text-xs font-medium select-none">
         <span className="font-semibold text-[#e3e2e8] tracking-tight">9:41</span>
         <div className="flex items-center gap-2 text-[#cec2d6]">
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-[#dbb8ff] font-mono border border-white/[0.06]">
@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onNavigate, onOpenAu
       </div>
 
       {/* Main Bar */}
-      <div className="max-w-md mx-auto h-14 px-4 flex items-center justify-between gap-2">
+      <div className="max-w-md md:max-w-3xl lg:max-w-6xl mx-auto h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-2">
         <div 
           onClick={() => onNavigate('home')} 
           className="flex items-center gap-2.5 cursor-pointer select-none group"
