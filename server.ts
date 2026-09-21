@@ -1,7 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import CryptoJS from 'crypto-js';
+
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -614,6 +616,20 @@ app.get('/api/music/catalog', (req, res) => {
   });
 });
 
+function getLocalFallbackTracks(language: string): RoyaltyFreeTrack[] {
+  const normalizedLanguage = language.toLowerCase();
+  if (normalizedLanguage === 'all') return VERIFIED_ROYALTY_FREE_TRACKS;
+
+  const matches = VERIFIED_ROYALTY_FREE_TRACKS.filter((track) => {
+    const searchableText = [track.language, track.genre, ...track.tags].filter(Boolean).join(' ').toLowerCase();
+    return searchableText.includes(normalizedLanguage);
+  });
+
+  return matches.length >= 5
+    ? matches
+    : [...matches, ...VERIFIED_ROYALTY_FREE_TRACKS.filter((track) => !matches.some((match) => match.id === track.id))];
+}
+
 // Copyright Safety & License Declaration
 app.get('/api/music/copyright-guarantee', (req, res) => {
   res.json({
@@ -1191,10 +1207,11 @@ app.get('/api/music/trending', async (req, res) => {
       tracks = [...exactMatches, ...otherMatches];
     }
 
-    // Supplement with verified local classical/fusion tracks if needed
-    if (tracks.length < 5) {
-      tracks = [...tracks, ...VERIFIED_ROYALTY_FREE_TRACKS];
-    }
+    // Keep the home feed populated when external providers are unavailable.
+    const fallbackTracks = getLocalFallbackTracks(lang);
+    const trackMap = new Map<string, RoyaltyFreeTrack>();
+    [...tracks, ...fallbackTracks].forEach((track) => trackMap.set(track.id, track));
+    tracks = Array.from(trackMap.values());
 
     responseCache.set(cacheKey, { data: tracks, timestamp: Date.now() });
     res.json({ success: true, tracks, aiPowered: true });
@@ -1434,11 +1451,12 @@ app.get('/api/music/search', async (req, res) => {
 
     const pidsArray = Array.from(collectedPids);
 
-    // Parallel retrieval from JioSaavn, YouTube scraping, and Groq metadata discovery
-    const [saavnTracksRes, ytScrapedRes, groundedTracksRes] = await Promise.allSettled([
+    // Parallel retrieval from JioSaavn, YouTube, iTunes, and Groq metadata discovery
+    const [saavnTracksRes, ytScrapedRes, itunesTracksRes, groundedTracksRes] = await Promise.allSettled([
       pidsArray.length > 0 ? fetchFullSaavnTracks(pidsArray.slice(0, 30)) : Promise.resolve([]),
       scrapeYoutubeTracks(rawQ),
-      discoverTracksWithGroq(rawQ)
+      searchItunesTracks(rawQ),
+      discoverTracksWithGroq(rawQ),
     ]);
 
     let resultTracks: RoyaltyFreeTrack[] = [];
@@ -1452,11 +1470,12 @@ app.get('/api/music/search', async (req, res) => {
         id: `yt_${v.videoId}`,
         title: cleanVideoTitle(v.title),
         artist: v.author || 'Worldwide Artist',
-        album: 'YouTube Worldwide',
+        album: 'YouTube Music',
         duration: v.duration || '03:45',
         durationSec: parseDurationToSec(v.duration),
         coverUrl: `https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg`,
-        audioUrl: `/api/music/resolve-yt-audio?id=${v.videoId}`,
+        audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
+        sourceUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
         genre: 'Worldwide Pop',
         language: 'English',
         isCopyrightSafe: true,
@@ -1467,16 +1486,24 @@ app.get('/api/music/search', async (req, res) => {
       }));
     }
 
+    let itunesTracks: RoyaltyFreeTrack[] = [];
+    if (itunesTracksRes.status === 'fulfilled') {
+      itunesTracks = itunesTracksRes.value;
+    }
+
     let groundedTracks: RoyaltyFreeTrack[] = [];
     if (groundedTracksRes.status === 'fulfilled') {
       groundedTracks = groundedTracksRes.value;
     }
 
-    // Merge everything beautifully, putting grounded tracks first to ensure precision
+    // Merge everything beautifully, putting grounded tracks and exact matches first
     const finalTracksMap = new Map<string, RoyaltyFreeTrack>();
     
     groundedTracks.forEach(t => finalTracksMap.set(t.id, t));
     resultTracks.forEach(t => {
+      if (!finalTracksMap.has(t.id)) finalTracksMap.set(t.id, t);
+    });
+    itunesTracks.forEach(t => {
       if (!finalTracksMap.has(t.id)) finalTracksMap.set(t.id, t);
     });
     ytTracks.forEach(t => {
@@ -1484,6 +1511,7 @@ app.get('/api/music/search', async (req, res) => {
     });
 
     let mergedResult = Array.from(finalTracksMap.values());
+
 
     // Step C: Fuzzy fallback on local verified tracks
     const localMatches = VERIFIED_ROYALTY_FREE_TRACKS.filter((t) => {
@@ -1609,15 +1637,17 @@ app.get('/api/music/search/grouped', async (req, res) => {
 
     await Promise.allSettled(tasks);
 
-    // Fetch direct JioSaavn songs, YouTube worldwide songs, and Groq-discovered songs in parallel.
+    // Fetch direct JioSaavn songs, YouTube songs, iTunes songs, and Groq-discovered songs in parallel.
     let directSongs: RoyaltyFreeTrack[] = [];
     let ytTracks: RoyaltyFreeTrack[] = [];
+    let itunesTracks: RoyaltyFreeTrack[] = [];
     let groundedTracks: RoyaltyFreeTrack[] = [];
 
-    const [saavnTracksRes, ytScrapedRes, groundedTracksRes] = await Promise.allSettled([
+    const [saavnTracksRes, ytScrapedRes, itunesTracksRes, groundedTracksRes] = await Promise.allSettled([
       collectedPids.size > 0 ? fetchFullSaavnTracks(Array.from(collectedPids).slice(0, 30)) : Promise.resolve([]),
       scrapeYoutubeTracks(rawQ),
-      discoverTracksWithGroq(rawQ)
+      searchItunesTracks(rawQ),
+      discoverTracksWithGroq(rawQ),
     ]);
 
     if (saavnTracksRes.status === 'fulfilled') {
@@ -1629,11 +1659,12 @@ app.get('/api/music/search/grouped', async (req, res) => {
         id: `yt_${v.videoId}`,
         title: cleanVideoTitle(v.title),
         artist: v.author || 'Worldwide Artist',
-        album: 'YouTube Worldwide',
+        album: 'YouTube Music',
         duration: v.duration || '03:45',
         durationSec: parseDurationToSec(v.duration),
         coverUrl: `https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg`,
-        audioUrl: `/api/music/resolve-yt-audio?id=${v.videoId}`, // Resolved on-the-fly dynamically
+        audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
+        sourceUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
         genre: 'Worldwide Pop',
         language: 'English',
         isCopyrightSafe: true,
@@ -1644,13 +1675,20 @@ app.get('/api/music/search/grouped', async (req, res) => {
       }));
     }
 
+    if (itunesTracksRes.status === 'fulfilled') {
+      itunesTracks = itunesTracksRes.value;
+    }
+
     if (groundedTracksRes.status === 'fulfilled') {
       groundedTracks = groundedTracksRes.value;
     }
 
-    // Merge Saavn tracks, YouTube worldwide tracks, and Groq-discovered tracks into directSongs
+    // Merge Saavn tracks, iTunes tracks, YouTube tracks, and Groq tracks into directSongs
     const mergedTracksMap = new Map<string, RoyaltyFreeTrack>();
     groundedTracks.forEach(t => mergedTracksMap.set(t.id, t));
+    itunesTracks.forEach(t => {
+      if (!mergedTracksMap.has(t.id)) mergedTracksMap.set(t.id, t);
+    });
     
     // Interleave the rest
     const maxLen = Math.max(directSongs.length, ytTracks.length);
@@ -1666,6 +1704,7 @@ app.get('/api/music/search/grouped', async (req, res) => {
     }
     
     directSongs = Array.from(mergedTracksMap.values());
+
 
     // Deduplicate and resolve album songs in parallel
     const uniqueAlbums = new Map<string, any>();
@@ -1989,10 +2028,104 @@ async function scrapeYoutubePlaylists(query: string): Promise<any[]> {
   }
 }
 
-// Robust YouTube video search scraping with real title and duration metadata
-async function scrapeYoutubeTracks(query: string): Promise<any[]> {
+// Filter to keep ONLY songs/music and exclude reaction, trailer, gameplay, and vlogs
+function isMusicSong(title: string, author?: string): boolean {
+  if (!title) return false;
+  const lower = (title + ' ' + (author || '')).toLowerCase();
+  const nonMusicWords = [
+    'reaction', 'reacts', 'gameplay', 'walkthrough', 'playthrough',
+    'review', 'unboxing', 'interview', 'podcast', 'episode',
+    'news', 'trailer', 'teaser', 'promo', 'scene', 'full movie',
+    'vlog', 'prank', 'tutorial', 'documentary'
+  ];
+  return !nonMusicWords.some((w) => lower.includes(w));
+}
+
+// iTunes Search API for instantaneous, reliable global song audio and metadata
+async function searchItunesTracks(query: string): Promise<RoyaltyFreeTrack[]> {
   try {
-    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=15`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const tracks: RoyaltyFreeTrack[] = [];
+
+    for (const item of (data.results || [])) {
+      if (!item.trackName) continue;
+      const durSec = item.trackTimeMillis ? Math.round(item.trackTimeMillis / 1000) : 210;
+      const cover = (item.artworkUrl100 || '')
+        .replace('100x100bb', '600x600bb')
+        .replace('100x100', '600x600');
+
+      tracks.push({
+        id: `itunes_${item.trackId}`,
+        title: decodeHtml(item.trackName),
+        artist: decodeHtml(item.artistName || 'Popular Artist'),
+        album: decodeHtml(item.collectionName || 'Single'),
+        duration: formatDuration(durSec),
+        durationSec: durSec,
+        coverUrl: cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+        audioUrl: item.previewUrl || '',
+        genre: item.primaryGenreName || 'Pop',
+        language: 'English',
+        isCopyrightSafe: true,
+        isRoyaltyFree: true,
+        isFullSong: false,
+        country: 'Worldwide',
+        tags: ['itunes', 'apple-music', 'high-fidelity', 'verified'],
+      });
+    }
+    return tracks;
+  } catch (err) {
+    console.warn('iTunes search error:', err);
+    return [];
+  }
+}
+
+// Official YouTube Data API v3 search when key is available
+async function searchYoutubeApi(query: string, apiKey: string): Promise<any[]> {
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=20&q=${encodeURIComponent(query + ' song audio')}&key=${apiKey}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const results: any[] = [];
+
+    for (const item of (data.items || [])) {
+      const videoId = item.id?.videoId;
+      const snippet = item.snippet;
+      if (!videoId || !snippet) continue;
+
+      const title = decodeHtml(snippet.title || '');
+      if (!isMusicSong(title, snippet.channelTitle)) continue;
+
+      results.push({
+        videoId,
+        title: cleanVideoTitle(title),
+        author: snippet.channelTitle || 'YouTube Music',
+        duration: '03:45',
+        thumbnail: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+      });
+    }
+    return results;
+  } catch (err) {
+    console.warn('YouTube API call failed:', err);
+    return [];
+  }
+}
+
+// Robust YouTube song-only search (combines official API if key provided + music scraper)
+async function scrapeYoutubeTracks(query: string): Promise<any[]> {
+  const ytApiKey = process.env.VITE_YOUTUBE_API_KEY || process.env.YOUTUBE_API_KEY;
+  if (ytApiKey && ytApiKey !== 'your_youtube_api_key_here') {
+    const apiResults = await searchYoutubeApi(query, ytApiKey);
+    if (apiResults.length > 0) return apiResults;
+  }
+
+  try {
+    // Focus search exclusively on music songs & audio
+    const musicQuery = /\b(song|audio|track|music)\b/i.test(query) ? query : `${query} song audio`;
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(musicQuery)}`;
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
@@ -2025,7 +2158,6 @@ async function scrapeYoutubeTracks(query: string): Promise<any[]> {
 
     if (jsonStr) {
       try {
-        // Handle variable assignments cleanly
         if (jsonStr.startsWith('{')) {
           const data = JSON.parse(jsonStr);
           const contents = data.contents?.twoColumnSearchResultRenderer?.primaryContents?.sectionListRenderer?.contents || [];
@@ -2041,10 +2173,13 @@ async function scrapeYoutubeTracks(query: string): Promise<any[]> {
               const duration = vr.lengthText?.simpleText || '03:45';
               
               if (videoId && title && !seen.has(videoId)) {
+                // Filter out non-song videos (reactions, trailers, podcasts, etc.)
+                if (!isMusicSong(title, author)) continue;
+
                 seen.add(videoId);
                 results.push({
                   videoId,
-                  title,
+                  title: cleanVideoTitle(title),
                   author,
                   duration,
                   thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
@@ -2068,14 +2203,15 @@ async function scrapeYoutubeTracks(query: string): Promise<any[]> {
         const rawTitle = match[3] || '';
         const title = rawTitle.replace(/\\u0026/g, '&').replace(/\\"/g, '"');
         if (videoId && title && !seen.has(videoId)) {
-          seen.add(videoId);
-          
           let channel = 'Worldwide Track';
           const channelMatch = match[2].match(/"ownerText":\{"runs":\[\{"text":"(.*?)"\}/);
           if (channelMatch && channelMatch[1]) {
             channel = channelMatch[1].replace(/\\u0026/g, '&').replace(/\\"/g, '"');
           }
           
+          if (!isMusicSong(title, channel)) continue;
+          seen.add(videoId);
+
           let duration = '04:15';
           const simpleDurMatch = match[2].match(/"simpleText":"(\d+:\d+)"/);
           if (simpleDurMatch && simpleDurMatch[1]) {
@@ -2084,7 +2220,7 @@ async function scrapeYoutubeTracks(query: string): Promise<any[]> {
           
           results.push({
             videoId,
-            title,
+            title: cleanVideoTitle(title),
             author: channel,
             duration,
             thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
@@ -2125,7 +2261,7 @@ function cleanVideoTitle(title: string): string {
 // Helper for regex-scraping first video ID from YouTube search page
 async function fetchYoutubeVideoIdFallback(query: string): Promise<string | null> {
   try {
-    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' song audio')}`;
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
@@ -2140,12 +2276,15 @@ async function fetchYoutubeVideoIdFallback(query: string): Promise<string | null
       }
     }
   } catch (err) {
-    console.error('YouTube search fallback error:', err);
+    return null;
   }
   return null;
 }
 
+
+
 // YouTube query search endpoint
+
 app.get('/api/music/youtube-search', async (req, res) => {
   try {
     const query = (req.query.q as string) || '';

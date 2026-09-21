@@ -22,7 +22,13 @@
   </head>
   <body class="bg-[#121317] text-[#e3e2e8] antialiased selection:bg-[#dbb8ff] selection:text-[#2b0052]">
     <div id="root"></div>
+    <!-- Hidden container for YouTube background audio playback -->
+    <div id="sonic-yt-player-container" style="position:fixed;bottom:-9999px;left:-9999px;width:1px;height:1px;pointer-events:none;opacity:0;">
+      <div id="sonic-yt-player"></div>
+    </div>
+    <script src="https://www.youtube.com/iframe_api"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+
 

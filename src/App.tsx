@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { TabType, Track, AppTheme } from './types';
+import { TabType, Track, AppTheme, UserAuthProfile } from './types';
 import { DEFAULT_NOW_PLAYING_TRACK } from './data/musicData';
 import { audioEngine } from './services/audioEngine';
 import {
   addToRecentlyPlayed,
   getAppTheme,
   getEndlessQueueTracks,
+  getAuthUser,
 } from './services/musicService';
+import { subscribeToFirebaseAuthState } from './services/firebase';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { MiniPlayer } from './components/MiniPlayer';
@@ -14,6 +16,7 @@ import { NowPlayingModal } from './components/NowPlayingModal';
 import { QueueModal } from './components/QueueModal';
 import { AuthModal } from './components/AuthModal';
 import { AudioQualitySelector } from './components/AudioQualitySelector';
+import { AuthScreen } from './screens/AuthScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { DiscoverScreen } from './screens/DiscoverScreen';
 import { RadioScreen } from './screens/RadioScreen';
@@ -22,6 +25,7 @@ import { LibraryScreen } from './screens/LibraryScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<UserAuthProfile>(() => getAuthUser());
   const [currentTab, setCurrentTab] = useState<TabType>('home');
   const [currentTrack, setCurrentTrack] = useState<Track>(DEFAULT_NOW_PLAYING_TRACK);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -32,6 +36,22 @@ export default function App() {
   const [studioInitialPrompt, setStudioInitialPrompt] = useState<string | undefined>(undefined);
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [appTheme, setAppThemeState] = useState<AppTheme>(getAppTheme());
+
+  // Listen to Firebase & local auth changes
+  useEffect(() => {
+    const unsubAuth = subscribeToFirebaseAuthState((profile) => {
+      if (profile) setCurrentUser(profile);
+    });
+    const handleAuthChange = (e: CustomEvent<UserAuthProfile>) => {
+      if (e.detail) setCurrentUser(e.detail);
+    };
+    window.addEventListener('sonic_auth_change', handleAuthChange as EventListener);
+    return () => {
+      unsubAuth();
+      window.removeEventListener('sonic_auth_change', handleAuthChange as EventListener);
+    };
+  }, []);
+
 
   // Active queue and playback position
   const [queue, setQueue] = useState<Track[]>([DEFAULT_NOW_PLAYING_TRACK]);
@@ -264,6 +284,19 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // If user is not authenticated, present the Firebase Auth Gate
+  if (!currentUser || !currentUser.isLoggedIn) {
+    return (
+      <div data-theme={appTheme} className="transition-colors duration-300">
+        <AuthScreen
+          onAuthSuccess={(user) => {
+            setCurrentUser(user);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       data-theme={appTheme}
@@ -277,8 +310,9 @@ export default function App() {
         onOpenQuality={() => setShowQualityModal(true)}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-md md:max-w-3xl lg:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-28 transition-opacity duration-200">
+      {/* Main Content Area (Wide Screen Optimized) */}
+      <main className="flex-1 w-full max-w-[1720px] mx-auto px-3 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-16 pb-28 transition-all duration-300">
+
         {currentTab === 'home' && (
           <HomeScreen
             onPlayTrack={playTrack}

@@ -1362,16 +1362,16 @@ export function getEndlessQueueTracks(currentQueue: Track[], count = 6): Track[]
 // ==========================================
 
 export const DEFAULT_USER: UserAuthProfile = {
-  id: 'usr_pranav_2026',
-  name: 'Pranav',
-  email: 'pranavecse2226@gmail.com',
-  avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBKrBN_LnXSfopwbdmHtLYDuH2eFw5lFqht3wTlagUPATX8mWcxwWqBeWOomFV6BltgZbc8XUg652_zucgH9eD5NQTG7bOyYqzi6R55Y7w9XuBaciCnZ2hu5ocUURQKA_Hs3UgWiqBTs_e8-H7Wu0V0abS8ALXm_sxvCDKNJMmAPJfWKW7zsUdG1xq70K10Xe31ahqkMPfRVB2i634rvvUqI8q6FVGmTS7F3yr8hjrV7h9yTg5x-7aoHg',
-  joinedDate: 'Joined Sept 2026',
+  id: 'guest',
+  name: 'Listener',
+  email: '',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
+  joinedDate: 'Joined 2026',
   plan: 'Hi-Fi Master',
   region: 'India 🇮🇳',
   preferredQuality: '320k',
   theme: 'dark',
-  isLoggedIn: true,
+  isLoggedIn: false,
 };
 
 export function getAuthUser(): UserAuthProfile {
@@ -1380,13 +1380,12 @@ export function getAuthUser(): UserAuthProfile {
     if (stored) {
       return JSON.parse(stored);
     }
-    // Set default user if not present
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(DEFAULT_USER));
     return DEFAULT_USER;
   } catch {
     return DEFAULT_USER;
   }
 }
+
 
 export function loginUser(email: string, name?: string, _password?: string): UserAuthProfile {
   const existing = getAuthUser();

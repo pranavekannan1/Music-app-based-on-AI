@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onNavigate, onOpenAu
   return (
     <header className="fixed top-0 inset-x-0 z-40 bg-[#0d0e12]/90 backdrop-blur-xl border-b border-white/[0.04] shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition-all">
       {/* Main Bar */}
-      <div className="max-w-md md:max-w-3xl lg:max-w-6xl mx-auto h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-2">
+      <div className="max-w-[1720px] mx-auto h-14 px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-3">
         <div 
           onClick={() => onNavigate('home')} 
           className="flex items-center gap-2.5 cursor-pointer select-none group"
