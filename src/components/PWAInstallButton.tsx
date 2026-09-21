@@ -2,77 +2,190 @@ import React, { useState } from 'react';
 import { usePWAInstall } from './usePWAInstall';
 
 export const PWAInstallButton: React.FC = () => {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const {
+    isInstallable,
+    isInstalled,
+    isIOS,
+    install,
+  } = usePWAInstall();
 
-  // If already running as an installed PWA, hide the button
+  const [showGuide, setShowGuide] =
+    useState(false);
+
+  const [installing, setInstalling] =
+    useState(false);
+
   if (isInstalled) {
     return null;
   }
 
-  // Chromium / Android / Desktop flow
-  if (isInstallable) {
-    return (
+  const handleInstall = async () => {
+    if (installing) {
+      return;
+    }
+
+    setInstalling(true);
+
+    const result = await install();
+
+    setInstalling(false);
+
+    /*
+     * Native installation was unavailable.
+     * Show manual instructions instead.
+     */
+    if (
+      result === 'manual' ||
+      result === 'dismissed'
+    ) {
+      setShowGuide(true);
+    }
+  };
+
+  return (
+    <>
       <button
-        onClick={install}
-        className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ab7bf6] to-[#7f39fb] px-3.5 py-1.5 text-xs font-semibold text-white shadow-[0_2px_12px_rgba(127,57,251,0.3)] hover:brightness-110 active:scale-95 transition-all"
+        type="button"
+        onClick={handleInstall}
+        disabled={installing}
+        aria-label="Install SonicAI App"
+        className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ab7bf6] to-[#7f39fb] px-3.5 py-1.5 text-xs font-semibold text-white shadow-[0_2px_12px_rgba(127,57,251,0.3)] hover:brightness-110 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
       >
-        <span className="material-symbols-outlined text-sm">download</span>
-        Install App
+        <span className="material-symbols-outlined text-sm">
+          {installing
+            ? 'hourglass_top'
+            : isInstallable
+              ? 'download'
+              : isIOS
+                ? 'phone_iphone'
+                : 'download'}
+        </span>
+
+        {installing
+          ? 'Installing...'
+          : 'Install App'}
       </button>
-    );
-  }
 
-  // iOS Safari flow (beforeinstallprompt is not supported by WebKit)
-  if (isIOS) {
-    return (
-      <>
-        <button
-          onClick={() => setShowIOSGuide(true)}
-          className="flex items-center gap-1.5 rounded-full border border-[#40385c] bg-[#1a152d]/60 px-3 py-1.5 text-xs font-semibold text-[#dbb8ff] hover:bg-[#1a152d] transition-all"
+      {showGuide && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setShowGuide(false)}
         >
-          <span className="material-symbols-outlined text-sm">phone_iphone</span>
-          Install App
-        </button>
+          <div
+            className="w-full max-w-sm rounded-2xl bg-[#13111e] border border-[#2b2545] p-6 shadow-2xl"
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="flex items-center justify-between border-b border-[#2b2545] pb-3 mb-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#dbb8ff]">
+                  download
+                </span>
 
-        {showIOSGuide && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-2xl bg-[#13111e] border border-[#2b2545] p-6 shadow-2xl animate-fade-in">
-              <div className="flex items-center justify-between border-b border-[#2b2545] pb-3 mb-4">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#dbb8ff]">download</span>
-                  Add to Home Screen
-                </h3>
-                <button
-                  onClick={() => setShowIOSGuide(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <span className="material-symbols-outlined text-lg">close</span>
-                </button>
-              </div>
-              <p className="text-xs text-gray-300 leading-relaxed space-y-3">
-                To run SonicAI in the background on iOS even after minimizing:
-                <span className="block mt-2 font-medium text-white flex items-center gap-2 bg-[#1a152d] p-2.5 rounded-xl border border-[#2b2545]">
-                  <span className="material-symbols-outlined text-base text-[#dbb8ff]">ios_share</span>
-                  1. Tap the Share button in Safari toolbar.
-                </span>
-                <span className="block mt-2 font-medium text-white flex items-center gap-2 bg-[#1a152d] p-2.5 rounded-xl border border-[#2b2545]">
-                  <span className="material-symbols-outlined text-base text-[#dbb8ff]">add_box</span>
-                  2. Scroll down and tap Add to Home Screen.
-                </span>
-              </p>
+                Install SonicAI
+              </h3>
+
               <button
-                onClick={() => setShowIOSGuide(false)}
-                className="mt-5 w-full rounded-full bg-gradient-to-r from-[#ab7bf6] to-[#7f39fb] py-2.5 text-xs font-bold text-white hover:brightness-110 active:scale-95 transition-all"
+                type="button"
+                onClick={() =>
+                  setShowGuide(false)
+                }
+                aria-label="Close"
+                className="text-gray-400 hover:text-white"
               >
-                Got It
+                <span className="material-symbols-outlined text-lg">
+                  close
+                </span>
               </button>
             </div>
-          </div>
-        )}
-      </>
-    );
-  }
 
-  return null;
+            {isIOS ? (
+              <div className="text-xs text-gray-300 leading-relaxed">
+                Install SonicAI on your iPhone or iPad:
+
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#2b2545] bg-[#1a152d] p-2.5 font-medium text-white">
+                  <span className="material-symbols-outlined text-base text-[#dbb8ff]">
+                    ios_share
+                  </span>
+
+                  <span>
+                    1. Tap the Share button in Safari.
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#2b2545] bg-[#1a152d] p-2.5 font-medium text-white">
+                  <span className="material-symbols-outlined text-base text-[#dbb8ff]">
+                    add_box
+                  </span>
+
+                  <span>
+                    2. Select "Add to Home Screen".
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#2b2545] bg-[#1a152d] p-2.5 font-medium text-white">
+                  <span className="material-symbols-outlined text-base text-[#dbb8ff]">
+                    check_circle
+                  </span>
+
+                  <span>
+                    3. Tap "Add".
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-gray-300 leading-relaxed">
+                <p>
+                  SonicAI can be installed as a desktop
+                  app from your browser.
+                </p>
+
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#2b2545] bg-[#1a152d] p-2.5 font-medium text-white">
+                  <span className="material-symbols-outlined text-base text-[#dbb8ff]">
+                    more_vert
+                  </span>
+
+                  <span>
+                    1. Open your browser menu.
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#2b2545] bg-[#1a152d] p-2.5 font-medium text-white">
+                  <span className="material-symbols-outlined text-base text-[#dbb8ff]">
+                    install_desktop
+                  </span>
+
+                  <span>
+                    2. Choose "Install SonicAI" or
+                    "Install app".
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#2b2545] bg-[#1a152d] p-2.5 font-medium text-white">
+                  <span className="material-symbols-outlined text-base text-[#dbb8ff]">
+                    check_circle
+                  </span>
+
+                  <span>
+                    3. Confirm the installation.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowGuide(false)
+              }
+              className="mt-5 w-full rounded-full bg-gradient-to-r from-[#ab7bf6] to-[#7f39fb] py-2.5 text-xs font-bold text-white hover:brightness-110 active:scale-95 transition-all"
+            >
+              Got It
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 };
