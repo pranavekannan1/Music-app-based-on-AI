@@ -624,11 +624,38 @@ export async function getLatestMovieAlbums(language: string = 'all'): Promise<Mo
       if (data.success && data.albums && data.albums.length > 0) {
         return data.albums;
       }
+      if (data.albums && data.albums.length > 0) {
+        return data.albums;
+      }
     }
   } catch (err) {
     console.warn('Failed to fetch new movie albums:', err);
   }
-  return [];
+
+  // Never show an empty "New Movies" rail — group the local catalog into albums.
+  const localTracks =
+    language === 'all'
+      ? VERIFIED_ROYALTY_FREE_TRACKS
+      : VERIFIED_ROYALTY_FREE_TRACKS.filter(
+          (t) =>
+            t.genre?.toLowerCase().includes(language.toLowerCase()) ||
+            t.tags?.some((tag) => tag.toLowerCase().includes(language.toLowerCase())),
+        );
+  const byAlbum = new Map<string, Track[]>();
+  localTracks.forEach((t) => {
+    const key = t.album || 'Singles';
+    if (!byAlbum.has(key)) byAlbum.set(key, []);
+    byAlbum.get(key)!.push(t);
+  });
+  return Array.from(byAlbum.entries()).map(([title, songs], i) => ({
+    id: `local_album_${i}_${title.toLowerCase().replace(/\s+/g, '_')}`,
+    title,
+    image: songs[0]?.coverUrl || '',
+    artist: songs[0]?.artist || 'Various Artists',
+    year: '2026',
+    songCount: songs.length,
+    songs,
+  })) as MovieSearchResult[];
 }
 
 /**

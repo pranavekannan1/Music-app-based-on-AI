@@ -176,6 +176,10 @@ export interface RoyaltyFreeTrack {
   isFullSong: boolean;
   country: string;
   tags: string[];
+  previewUrl?: string;
+  sourceUrl?: string;
+  releaseYear?: string;
+  appleMusicUrl?: string;
 }
 
 const VERIFIED_ROYALTY_FREE_TRACKS: RoyaltyFreeTrack[] = [
@@ -702,6 +706,28 @@ function getLocalFallbackTracks(language: string): RoyaltyFreeTrack[] {
   return matches.length >= 5
     ? matches
     : [...matches, ...VERIFIED_ROYALTY_FREE_TRACKS.filter((track) => !matches.some((match) => match.id === track.id))];
+}
+
+// Groups the local verified catalog into "albums" so the New Movies / Albums
+// rail always has something to show if every live provider is unreachable,
+// instead of silently rendering an empty section.
+function getLocalFallbackAlbums(language: string): any[] {
+  const tracks = getLocalFallbackTracks(language);
+  const byAlbum = new Map<string, RoyaltyFreeTrack[]>();
+  tracks.forEach((t) => {
+    const key = t.album || 'Singles';
+    if (!byAlbum.has(key)) byAlbum.set(key, []);
+    byAlbum.get(key)!.push(t);
+  });
+  return Array.from(byAlbum.entries()).map(([title, songs], i) => ({
+    id: `local_album_${i}_${title.toLowerCase().replace(/\s+/g, '_')}`,
+    title,
+    image: songs[0]?.coverUrl || '',
+    artist: songs[0]?.artist || 'Various Artists',
+    year: songs[0]?.releaseYear || '2026',
+    songCount: songs.length,
+    songs,
+  }));
 }
 
 // Copyright Safety & License Declaration
@@ -1394,12 +1420,18 @@ app.get('/api/music/new-movies', async (req, res) => {
     });
 
     const resolvedAlbums = await Promise.all(albumTasks);
-    const validAlbums = resolvedAlbums.filter(a => a.songs.length > 0);
+    let validAlbums = resolvedAlbums.filter(a => a.songs.length > 0);
+
+    // Never leave the "New Movies" rail empty just because the live
+    // provider was unreachable — top it up with the local catalog.
+    if (validAlbums.length === 0) {
+      validAlbums = getLocalFallbackAlbums(lang);
+    }
 
     responseCache.set(cacheKey, { data: validAlbums, timestamp: Date.now() });
     res.json({ success: true, albums: validAlbums });
   } catch (error: any) {
-    res.status(500).json({ success: false, albums: [] });
+    res.status(500).json({ success: false, albums: getLocalFallbackAlbums(((req.query.language as string) || 'all').toLowerCase()) });
   }
 });
 
@@ -1575,11 +1607,12 @@ app.get('/api/music/search', async (req, res) => {
 
     const pidsArray = Array.from(collectedPids);
 
-    // Parallel retrieval from JioSaavn, YouTube, iTunes, and Groq metadata discovery
-    const [saavnTracksRes, ytScrapedRes, itunesTracksRes, groundedTracksRes] = await Promise.allSettled([
+    // Parallel retrieval from JioSaavn, YouTube, iTunes, Deezer (worldwide catalog), and Groq metadata discovery
+    const [saavnTracksRes, ytScrapedRes, itunesTracksRes, deezerTracksRes, groundedTracksRes] = await Promise.allSettled([
       pidsArray.length > 0 ? fetchFullSaavnTracks(pidsArray.slice(0, 30)) : Promise.resolve([]),
       scrapeYoutubeTracks(rawQ),
       searchItunesTracks(rawQ),
+      searchDeezerSongs(rawQ, 25),
       discoverTracksWithGroq(rawQ),
     ]);
 
@@ -1615,6 +1648,11 @@ app.get('/api/music/search', async (req, res) => {
       itunesTracks = itunesTracksRes.value;
     }
 
+    let deezerTracks: RoyaltyFreeTrack[] = [];
+    if (deezerTracksRes.status === 'fulfilled') {
+      deezerTracks = deezerTracksRes.value;
+    }
+
     let groundedTracks: RoyaltyFreeTrack[] = [];
     if (groundedTracksRes.status === 'fulfilled') {
       groundedTracks = groundedTracksRes.value;
@@ -1628,6 +1666,9 @@ app.get('/api/music/search', async (req, res) => {
       if (!finalTracksMap.has(t.id)) finalTracksMap.set(t.id, t);
     });
     itunesTracks.forEach(t => {
+      if (!finalTracksMap.has(t.id)) finalTracksMap.set(t.id, t);
+    });
+    deezerTracks.forEach(t => {
       if (!finalTracksMap.has(t.id)) finalTracksMap.set(t.id, t);
     });
     ytTracks.forEach(t => {
@@ -1696,10 +1737,12 @@ function mapDeezerTrack(t: any): RoyaltyFreeTrack | null {
     audioUrl: t.preview || undefined,
     sourceUrl: t.link || undefined,
     genre: 'Music',
+    language: 'Worldwide',
     country: 'Worldwide',
     releaseYear: t.album?.release_date ? String(t.album.release_date).slice(0, 4) : undefined,
     isFullSong: false,
     isCopyrightSafe: false,
+    isRoyaltyFree: false,
     tags: ['deezer'],
   };
 }
@@ -1719,10 +1762,12 @@ function mapItunesSong(t: any): RoyaltyFreeTrack | null {
     sourceUrl: t.trackViewUrl || t.collectionViewUrl || undefined,
     appleMusicUrl: t.trackViewUrl || t.collectionViewUrl || undefined,
     genre: t.primaryGenreName || 'Music',
+    language: 'Worldwide',
     country: t.country || 'Worldwide',
     releaseYear: t.releaseDate ? String(t.releaseDate).slice(0, 4) : undefined,
     isFullSong: false,
     isCopyrightSafe: false,
+    isRoyaltyFree: false,
     tags: ['itunes'],
   };
 }
@@ -1829,40 +1874,12 @@ async function searchMusicBrainzArtists(query: string, limit = 6): Promise<any[]
   return data?.artists || [];
 }
 
-// Direct provider search endpoint. The frontend can use this for ordinary song search.
-app.get('/api/music/search', async (req, res) => {
-  try {
-    const q = String(req.query.q || '').trim();
-    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 25));
-    if (!q) return res.json({ success: true, tracks: VERIFIED_ROYALTY_FREE_TRACKS.slice(0, limit) });
-
-    const cacheKey = `provider_search_v1_${q.toLowerCase()}_${limit}`;
-    const cached = responseCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      return res.json({ success: true, tracks: cached.data });
-    }
-
-    const [deezer, itunes, saavn] = await Promise.allSettled([
-      searchDeezerSongs(q, limit),
-      searchItunesSongs(q, limit),
-      searchSaavnSongs(q, limit),
-    ]);
-
-    const merged = new Map<string, RoyaltyFreeTrack>();
-    for (const r of [deezer, itunes, saavn]) {
-      if (r.status === 'fulfilled') for (const track of r.value) if (track?.title) {
-        const key = `${track.title.toLowerCase()}|${track.artist.toLowerCase()}`;
-        if (!merged.has(key)) merged.set(key, track);
-      }
-    }
-
-    const tracks = Array.from(merged.values()).slice(0, limit);
-    responseCache.set(cacheKey, { data: tracks, timestamp: Date.now() });
-    return res.json({ success: true, query: q, tracks });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error?.message || 'Search failed', tracks: [] });
-  }
-});
+// NOTE: a second, now-removed `/api/music/search` handler used to live here.
+// Express only ever dispatches to the FIRST route registered for a given
+// path+method, so this whole block was 100% dead code — it could never run,
+// which is part of why search results felt thin. Its Deezer/iTunes/Saavn
+// merge logic has been folded into the active `/api/music/search` handler
+// above instead (see the `deezerTracksRes` addition there).
 
 // Full grouped search: Songs + Movies/Albums + Artists + Playlists.
 app.get('/api/music/search/grouped', async (req, res) => {
