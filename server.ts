@@ -1925,33 +1925,42 @@ app.get('/api/music/search/grouped', async (req, res) => {
     const movies: any[] = [];
 
     // Deezer albums are useful for music/movie soundtracks, especially Indian film albums.
-    for (const album of deezerAlbums.slice(0, 8)) {
-      const albumSongs = await fetchDeezerAlbumTracks(String(album.id), 30);
-      movies.push({
-        id: `album_${album.id}`,
-        title: album.title || 'Album',
-        image: album.cover_xl || album.cover_big || album.cover_medium || '',
-        artist: album.artist?.name || 'Various Artists',
-        year: album.release_date ? String(album.release_date).slice(0, 4) : undefined,
-        songCount: albumSongs.length,
-        songs: albumSongs,
-      });
-    }
+    // Fetched in PARALLEL (was sequential — sequential awaits across dozens of
+    // provider calls could take 30-90+ seconds and blow through Render's request
+    // timeout, which is why search could come back completely empty).
+    const deezerAlbumMovies = await Promise.all(
+      deezerAlbums.slice(0, 8).map(async (album) => {
+        const albumSongs = await fetchDeezerAlbumTracks(String(album.id), 30);
+        return {
+          id: `album_${album.id}`,
+          title: album.title || 'Album',
+          image: album.cover_xl || album.cover_big || album.cover_medium || '',
+          artist: album.artist?.name || 'Various Artists',
+          year: album.release_date ? String(album.release_date).slice(0, 4) : undefined,
+          songCount: albumSongs.length,
+          songs: albumSongs,
+        };
+      }),
+    );
+    movies.push(...deezerAlbumMovies);
 
     // JioSaavn albums are particularly useful for Indian movie soundtracks.
-    for (const album of saavnAlbums.slice(0, 8)) {
-      const albumSongs = await fetchAlbumSongs(String(album.id), album.title);
-      movies.push({
-        id: `saavn_album_${album.id}`,
-        title: decodeHtml(album.title || 'Movie Album'),
-        image: String(album.image || albumSongs.image || '').replace('150x150', '500x500').replace('50x50', '500x500'),
-        artist: decodeHtml(album.music || album.subtitle || albumSongs.artist || 'Movie Soundtrack'),
-        year: album.year ? String(album.year) : undefined,
-        songCount: albumSongs.songs.length,
-        songs: albumSongs.songs,
-        sourceUrl: album.perma_url,
-      });
-    }
+    const saavnAlbumMovies = await Promise.all(
+      saavnAlbums.slice(0, 8).map(async (album) => {
+        const albumSongs = await fetchAlbumSongs(String(album.id), album.title);
+        return {
+          id: `saavn_album_${album.id}`,
+          title: decodeHtml(album.title || 'Movie Album'),
+          image: String(album.image || albumSongs.image || '').replace('150x150', '500x500').replace('50x50', '500x500'),
+          artist: decodeHtml(album.music || album.subtitle || albumSongs.artist || 'Movie Soundtrack'),
+          year: album.year ? String(album.year) : undefined,
+          songCount: albumSongs.songs.length,
+          songs: albumSongs.songs,
+          sourceUrl: album.perma_url,
+        };
+      }),
+    );
+    movies.push(...saavnAlbumMovies);
 
     // iTunes gives an independent movie catalog. It is metadata/previews, not full movie streaming.
     for (const movie of itunesMovies.slice(0, 6)) {
@@ -1973,17 +1982,23 @@ app.get('/api/music/search/grouped', async (req, res) => {
     }
 
     const artistMap = new Map<string, any>();
-    for (const artist of deezerArtists) {
-      const tracks = await fetchDeezerArtistTracks(String(artist.id), 15);
-      artistMap.set(String(artist.id), {
-        id: `artist_${artist.id}`,
-        name: artist.name,
-        image: artist.picture_xl || artist.picture_big || artist.picture_medium || '',
-        role: 'Artist',
-        followerCount: artist.nb_fan ? String(artist.nb_fan) : undefined,
-        songs: tracks,
-      });
-    }
+    const deezerArtistEntries = await Promise.all(
+      deezerArtists.map(async (artist) => {
+        const tracks = await fetchDeezerArtistTracks(String(artist.id), 15);
+        return [
+          String(artist.id),
+          {
+            id: `artist_${artist.id}`,
+            name: artist.name,
+            image: artist.picture_xl || artist.picture_big || artist.picture_medium || '',
+            role: 'Artist',
+            followerCount: artist.nb_fan ? String(artist.nb_fan) : undefined,
+            songs: tracks,
+          },
+        ] as const;
+      }),
+    );
+    deezerArtistEntries.forEach(([id, entry]) => artistMap.set(id, entry));
     // Even when an artist-specific provider endpoint is unavailable, live song results still give us artist entries.
     for (const track of songs.slice(0, 30)) {
       const artist = mapSaavnArtistFromTrack(track);
@@ -2008,33 +2023,39 @@ app.get('/api/music/search/grouped', async (req, res) => {
     }
 
     const playlists: any[] = [];
-    for (const playlist of deezerPlaylists.slice(0, 8)) {
-      const tracks = await fetchDeezerPlaylistTracks(String(playlist.id), 30);
-      playlists.push({
-        id: `playlist_${playlist.id}`,
-        title: playlist.title || 'Playlist',
-        image: playlist.picture_xl || playlist.picture_big || playlist.picture_medium || '',
-        trackCount: playlist.nb_tracks || tracks.length,
-        description: playlist.description || `Public playlist matching ${rawQ}`,
-        songs: tracks,
-      });
-    }
+    const deezerPlaylistEntries = await Promise.all(
+      deezerPlaylists.slice(0, 8).map(async (playlist) => {
+        const tracks = await fetchDeezerPlaylistTracks(String(playlist.id), 30);
+        return {
+          id: `playlist_${playlist.id}`,
+          title: playlist.title || 'Playlist',
+          image: playlist.picture_xl || playlist.picture_big || playlist.picture_medium || '',
+          trackCount: playlist.nb_tracks || tracks.length,
+          description: playlist.description || `Public playlist matching ${rawQ}`,
+          songs: tracks,
+        };
+      }),
+    );
+    playlists.push(...deezerPlaylistEntries);
 
     // Public JioSaavn playlists, when exposed by the provider search endpoint.
-    for (const playlist of saavnPlaylists.slice(0, 8)) {
-      const playlistId = playlist.id || playlist.pid;
-      if (!playlistId) continue;
-      const tracks = await fetchPlaylistSongs(String(playlistId), playlist.title || rawQ);
-      playlists.push({
-        id: `saavn_playlist_${playlistId}`,
-        title: decodeHtml(playlist.title || 'Playlist'),
-        image: String(playlist.image || '').replace('150x150', '500x500').replace('50x50', '500x500'),
-        trackCount: tracks.songs.length,
-        description: decodeHtml(playlist.subtitle || playlist.description || `Live playlist matching ${rawQ}`),
-        songs: tracks.songs,
-        sourceUrl: playlist.perma_url,
-      });
-    }
+    const saavnPlaylistEntries = await Promise.all(
+      saavnPlaylists.slice(0, 8).map(async (playlist) => {
+        const playlistId = playlist.id || playlist.pid;
+        if (!playlistId) return null;
+        const tracks = await fetchPlaylistSongs(String(playlistId), playlist.title || rawQ);
+        return {
+          id: `saavn_playlist_${playlistId}`,
+          title: decodeHtml(playlist.title || 'Playlist'),
+          image: String(playlist.image || '').replace('150x150', '500x500').replace('50x50', '500x500'),
+          trackCount: tracks.songs.length,
+          description: decodeHtml(playlist.subtitle || playlist.description || `Live playlist matching ${rawQ}`),
+          songs: tracks.songs,
+          sourceUrl: playlist.perma_url,
+        };
+      }),
+    );
+    playlists.push(...saavnPlaylistEntries.filter(Boolean));
 
     // If providers are temporarily unavailable, preserve useful local results.
     const local = VERIFIED_ROYALTY_FREE_TRACKS.filter(t =>
