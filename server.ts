@@ -10,6 +10,18 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.disable('x-powered-by');
 
+// Allow the Vercel frontend to call this Render API directly.
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
 app.use(express.json());
 
 // Groq exposes an OpenAI-compatible chat completions API, so keep the server

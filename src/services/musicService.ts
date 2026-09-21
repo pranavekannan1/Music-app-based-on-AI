@@ -13,7 +13,8 @@ import {
   PlaylistSearchResult,
 } from '../types';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const DEFAULT_API_BASE_URL = 'https://sonicai-music.onrender.com';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '');
 
 export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
