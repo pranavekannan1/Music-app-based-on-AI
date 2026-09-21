@@ -16,6 +16,7 @@ import {
 import { subscribeToFirebaseAuthState } from './services/firebase';
 
 import { Header } from './components/Header';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import { BottomNav } from './components/BottomNav';
 import { MiniPlayer } from './components/MiniPlayer';
 import { NowPlayingModal } from './components/NowPlayingModal';
@@ -612,6 +613,11 @@ export default function App() {
           setShowQualityModal(true);
         }}
       />
+
+      {/* PWA INSTALL BUTTON */}
+      <div className="fixed top-[72px] right-4 z-40">
+        <PWAInstallButton />
+      </div>
 
       <main className="flex-1 w-full max-w-[1720px] mx-auto px-3 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-16 pb-28 transition-all duration-300">
         {currentTab === 'home' && (

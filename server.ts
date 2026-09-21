@@ -44,6 +44,68 @@ async function askGroq(prompt: string): Promise<string | null> {
 
 // In-memory cache for fast responsive requests
 const responseCache = new Map<string, { data: any; timestamp: number }>();
+
+// AI music prompt planner. It returns recommendations/queries; it never fabricates audio URLs.
+app.post('/api/ai/music-suggestions', async (req, res) => {
+  try {
+    const prompt = String(req.body?.prompt || '').trim().slice(0, 1000);
+    if (!prompt) {
+      return res.status(400).json({ success: false, message: 'Prompt is required.' });
+    }
+
+    const systemPrompt = `You are SonicAI's music recommendation planner.
+Turn the user's natural-language request into 8 useful music search suggestions.
+Do not invent songs. Prefer real artists/songs when you know them.
+Return ONLY valid JSON:
+{
+  "summary": "one short sentence describing the requested listening experience",
+  "suggestions": [
+    {"title":"song title or search phrase","artist":"artist if known","reason":"short reason","searchQuery":"best search query"}
+  ]
+}
+Keep suggestions diverse and directly relevant.`;
+
+    if (process.env.GROQ_API_KEY) {
+      const response = await askGroq(`${systemPrompt}\n\nUser request: ${prompt}`);
+      if (response) {
+        const parsed = JSON.parse(response.replace(/^```json\s*/i, '').replace(/```$/i, '').trim());
+        if (parsed?.suggestions?.length) {
+          return res.json({
+            success: true,
+            summary: parsed.summary || 'Personalized suggestions based on your prompt.',
+            suggestions: parsed.suggestions.slice(0, 8),
+          });
+        }
+      }
+    }
+
+    // Deterministic fallback when AI credentials are unavailable.
+    const queries = [
+      prompt,
+      `${prompt} popular songs`,
+      `${prompt} instrumental`,
+      `${prompt} chill`,
+      `${prompt} acoustic`,
+      `${prompt} electronic`,
+      `${prompt} indie`,
+      `${prompt} classics`,
+    ];
+    return res.json({
+      success: true,
+      summary: `Suggestions generated from: "${prompt}"`,
+      suggestions: queries.map((q, i) => ({
+        title: q,
+        artist: '',
+        reason: i === 0 ? 'Direct match to your request.' : 'A related search variation.',
+        searchQuery: q,
+      })),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'AI suggestion failed.' });
+  }
+});
+
+
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 // Helper to decode HTML entities in metadata
@@ -2068,9 +2130,10 @@ async function searchItunesTracks(query: string): Promise<RoyaltyFreeTrack[]> {
         audioUrl: item.previewUrl || '',
         genre: item.primaryGenreName || 'Pop',
         language: 'English',
-        isCopyrightSafe: true,
-        isRoyaltyFree: true,
+        isCopyrightSafe: false,
+        isRoyaltyFree: false,
         isFullSong: false,
+        license: 'Apple/iTunes preview; rights remain with the respective rights holders',
         country: 'Worldwide',
         tags: ['itunes', 'apple-music', 'high-fidelity', 'verified'],
       });

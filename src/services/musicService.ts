@@ -13,6 +13,13 @@ import {
   PlaylistSearchResult,
 } from '../types';
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return fetch(`${API_BASE_URL}${normalizedPath}`, init);
+}
+
 /**
  * 100% Royalty-Free, Copyright-Safe Indian & Global Music Service
  *
@@ -467,27 +474,13 @@ export interface UserLocationInfo {
 let cachedLocation: UserLocationInfo | null = null;
 
 /**
- * Backend API base URL.
- * Leave VITE_API_URL empty when frontend and backend share the same domain.
- * Set it to the Render backend URL when the frontend is deployed separately.
- */
-const API_BASE_URL = (
-  import.meta.env.VITE_API_URL || ''
-).replace(/\/$/, '');
-
-function apiUrl(path: string): string {
-  return `${API_BASE_URL}${path}`;
-}
-
-
-/**
  * Automatically detect user location and regional music preference (Zero manual switcher needed)
  */
 export async function detectUserLocation(): Promise<UserLocationInfo> {
   if (cachedLocation) return cachedLocation;
 
   try {
-    const res = await fetch(apiUrl('/api/music/location'));
+    const res = await apiFetch('/api/music/location');
     if (res.ok) {
       const data = await res.json();
       if (data.country) {
@@ -539,7 +532,7 @@ export async function getCatalogTracks(query = '', page = 1, limit = 20): Promis
       page: String(page),
       limit: String(limit),
     });
-    const res = await fetch(apiUrl(`/api/music/catalog?${params.toString()}`));
+    const res = await apiFetch(`/api/music/catalog?${params.toString()}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.tracks)) {
@@ -580,7 +573,7 @@ export async function getLiveSearchSuggestions(query: string): Promise<SearchSug
   if (!cleanQ) return [];
 
   try {
-    const res = await fetch(apiUrl(`/api/music/suggest?q=${encodeURIComponent(cleanQ)}`));
+    const res = await apiFetch(`/api/music/suggest?q=${encodeURIComponent(cleanQ)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.suggestions)) {
@@ -599,7 +592,7 @@ export async function getLiveSearchSuggestions(query: string): Promise<SearchSug
  */
 export async function getTrendingIndianSongs(language: string = 'all'): Promise<Track[]> {
   try {
-    const res = await fetch(apiUrl(`/api/music/trending?language=${encodeURIComponent(language)}`));
+    const res = await apiFetch(`/api/music/trending?language=${encodeURIComponent(language)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.tracks && data.tracks.length > 0) {
@@ -624,7 +617,7 @@ export async function getTrendingIndianSongs(language: string = 'all'): Promise<
  */
 export async function getLatestMovieAlbums(language: string = 'all'): Promise<MovieSearchResult[]> {
   try {
-    const res = await fetch(apiUrl(`/api/music/new-movies?language=${encodeURIComponent(language)}`));
+    const res = await apiFetch(`/api/music/new-movies?language=${encodeURIComponent(language)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.albums && data.albums.length > 0) {
@@ -642,7 +635,7 @@ export async function getLatestMovieAlbums(language: string = 'all'): Promise<Mo
  */
 export async function getYouTubeVideoDetails(title: string, artist: string): Promise<{ videoId: string; videoTitle: string; channelName: string } | null> {
   try {
-    const res = await fetch(apiUrl(`/api/music/youtube-video?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`));
+    const res = await apiFetch(`/api/music/youtube-video?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.videoId) {
@@ -664,7 +657,7 @@ export async function getYouTubeVideoDetails(title: string, artist: string): Pro
  */
 export async function searchYouTubeVideos(query: string): Promise<any[]> {
   try {
-    const res = await fetch(apiUrl(`/api/music/youtube-search?q=${encodeURIComponent(query)}`));
+    const res = await apiFetch(`/api/music/youtube-search?q=${encodeURIComponent(query)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.videos) {
@@ -682,7 +675,7 @@ export async function searchYouTubeVideos(query: string): Promise<any[]> {
  */
 export async function triggerAiMusicRefresh(language: string = 'all'): Promise<boolean> {
   try {
-    const res = await fetch(apiUrl('/api/music/ai-refresh'), {
+    const res = await apiFetch('/api/music/ai-refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ language }),
@@ -708,7 +701,7 @@ export async function searchWorldwideCatalog(query: string, limit: number = 25):
   const cleanQ = query.trim().toLowerCase();
 
   try {
-    const res = await fetch(apiUrl(`/api/music/search?q=${encodeURIComponent(cleanQ)}&limit=${limit}`));
+    const res = await apiFetch(`/api/music/search?q=${encodeURIComponent(cleanQ)}&limit=${limit}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.tracks && data.tracks.length > 0) {
@@ -747,7 +740,7 @@ export async function searchWorldwideGrouped(query: string): Promise<GroupedSear
   const cleanQ = query.trim().toLowerCase();
 
   try {
-    const res = await fetch(apiUrl(`/api/music/search/grouped?q=${encodeURIComponent(cleanQ)}`));
+    const res = await apiFetch(`/api/music/search/grouped?q=${encodeURIComponent(cleanQ)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
@@ -832,7 +825,7 @@ export async function searchWorldwideGrouped(query: string): Promise<GroupedSear
  */
 export async function getIndianPriorityRadios(): Promise<RadioStation[]> {
   try {
-    const res = await fetch(apiUrl('/api/music/radios/indian'));
+    const res = await apiFetch('/api/music/radios/indian');
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.radios) {

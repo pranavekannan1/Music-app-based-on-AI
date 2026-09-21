@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Track } from '../types';
-import { searchWorldwideCatalog } from '../services/musicService';
+import { searchWorldwideCatalog, apiFetch } from '../services/musicService';
 
 interface StudioScreenProps {
   onStartSession: (tracks: Track[]) => void;
@@ -66,7 +66,7 @@ export const StudioScreen: React.FC<StudioScreenProps> = ({
     setTelemetryProgress(20);
 
     try {
-      const response = await fetch('/api/ai/music-suggestions', {
+      const response = await apiFetch('/api/ai/music-suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),

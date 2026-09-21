@@ -10,6 +10,7 @@ import {
   getLiveSearchSuggestions,
   SearchSuggestionItem,
   detectUserLocation,
+  apiFetch,
 } from '../services/musicService';
 
 interface DiscoverScreenProps {
@@ -70,7 +71,7 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
 
     setPlaylistLoadingId(playlist.id);
     try {
-      const res = await fetch(`/api/music/playlist?id=${encodeURIComponent(playlist.id)}&title=${encodeURIComponent(playlist.title)}`);
+      const res = await apiFetch(`/api/music/playlist?id=${encodeURIComponent(playlist.id)}&title=${encodeURIComponent(playlist.title)}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.songs && data.songs.length > 0) {
