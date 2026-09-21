@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { UserAuthProfile, AppTheme, AudioQuality, UserTasteProfile } from '../types';
 import {
   getAuthUser,
-  logoutUser,
   getAppTheme,
   setAppTheme,
   getAudioQuality,
@@ -13,7 +12,7 @@ import {
   updateUserProfile,
 } from '../services/musicService';
 import { ThemeSelector } from '../components/ThemeSelector';
-import { AuthModal } from '../components/AuthModal';
+import { logoutFromFirebase } from '../services/firebase';
 import { AudioQualitySelector } from '../components/AudioQualitySelector';
 
 interface ProfileScreenProps {
@@ -29,7 +28,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenStudio }) =>
   const [onRepeatList, setOnRepeatList] = useState<{ track: any; playCount: number }[]>([]);
   const [tasteProfile, setTasteProfile] = useState<UserTasteProfile | null>(null);
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isQualityModalOpen, setIsQualityModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -86,10 +84,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenStudio }) =>
     showToast(`Name updated to ${updated.name}`);
   };
 
-  const handleLogout = () => {
-    const loggedOut = logoutUser();
-    setUser(loggedOut);
-    showToast('Logged out to guest mode');
+  const handleLogout = async () => {
+    await logoutFromFirebase();
+    showToast('Logged out successfully');
   };
 
   const handleThemeChange = (newTheme: AppTheme) => {
@@ -170,32 +167,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenStudio }) =>
 
         {/* Account Controls */}
         <div className="flex items-center gap-2 mt-3.5 flex-wrap justify-center">
-          {user.isLoggedIn ? (
-            <>
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="px-3.5 py-1.5 rounded-full bg-[#24252e] text-[#e3e2e8] text-xs font-semibold hover:bg-[#343540] transition-colors border border-white/10 cursor-pointer flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-sm text-[#dbb8ff]">switch_account</span>
-                <span>Switch Account</span>
-              </button>
-              <button
-                onClick={handleLogout}
-                className="px-3.5 py-1.5 rounded-full bg-[#3a1d22] text-[#ffb1c5] text-xs font-semibold hover:bg-[#4a242a] transition-colors border border-rose-500/20 cursor-pointer flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-sm">logout</span>
-                <span>Log Out</span>
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="px-5 py-2 rounded-full bg-gradient-to-r from-[#7928ca] to-[#dbb8ff] text-white text-xs font-bold shadow-lg hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-base">login</span>
-              <span>Sign Up / Log In</span>
-            </button>
-          )}
+          <button
+            onClick={handleLogout}
+            className="px-3.5 py-1.5 rounded-full bg-[#3a1d22] text-[#ffb1c5] text-xs font-semibold hover:bg-[#4a242a] transition-colors border border-rose-500/20 cursor-pointer flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-sm">logout</span>
+            <span>Log Out</span>
+          </button>
         </div>
 
         {/* Stats Grid */}
@@ -406,16 +384,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenStudio }) =>
           Sonic continuously updates your queue based on your listening history, liked tracks, and favorite genres.
         </p>
       </section>
-
-      {/* Modals */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onAuthSuccess={(u) => {
-          setUser(u);
-          refreshProfile();
-        }}
-      />
 
       <AudioQualitySelector
         isOpen={isQualityModalOpen}

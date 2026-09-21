@@ -29,6 +29,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
     setErrorMsg(null);
     setInfoMsg(null);
 
+    if (!isFirebaseConfigured) {
+      setErrorMsg('Firebase Authentication is not configured. Add the VITE_FIREBASE_* values to your .env file.');
+      return;
+    }
+
     if (!email.trim() || !password.trim()) {
       setErrorMsg('Please provide both email and password.');
       return;
@@ -86,21 +91,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
     }
   };
 
-  const handleGuestBypass = () => {
-    const guestUser: UserAuthProfile = {
-      id: `guest_${Date.now()}`,
-      name: 'Guest Explorer',
-      email: 'guest@sonic.ai',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
-      joinedDate: 'Guest Preview',
-      plan: 'Free',
-      region: 'India 🇮🇳',
-      preferredQuality: '320k',
-      theme: 'dark',
-      isLoggedIn: true,
-    };
-    onAuthSuccess(guestUser);
-  };
 
   const handleSendReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -297,7 +287,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
         </div>
 
         {/* Social / Alternative Buttons */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <button
             type="button"
             onClick={handleGoogleSignIn}
@@ -323,15 +313,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               />
             </svg>
             <span>Google</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleGuestBypass}
-            className="py-2.5 px-3 rounded-xl bg-[#1b1c24] hover:bg-[#23242e] border border-white/[0.08] text-xs font-semibold text-[#dbb8ff] transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:border-[#dbb8ff]/30 active:scale-95"
-          >
-            <span className="material-symbols-outlined text-sm">play_circle</span>
-            <span>Guest Preview</span>
           </button>
         </div>
 

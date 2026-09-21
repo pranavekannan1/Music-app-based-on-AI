@@ -7,11 +7,10 @@ import { PWAInstallButton } from './PWAInstallButton';
 interface HeaderProps {
   currentTab: TabType;
   onNavigate: (tab: TabType) => void;
-  onOpenAuth?: () => void;
   onOpenQuality?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentTab, onNavigate, onOpenAuth, onOpenQuality }) => {
+export const Header: React.FC<HeaderProps> = ({ currentTab, onNavigate, onOpenQuality }) => {
   const [user, setUser] = useState(getAuthUser());
   const [theme, setTheme] = useState<AppTheme>(getAppTheme());
   const [quality, setQuality] = useState<AudioQuality>(getAudioQuality());
@@ -117,32 +116,23 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onNavigate, onOpenAu
             <span>{quality === '320k' ? '320k HD' : quality}</span>
           </button>
 
-          {/* User Profile Avatar / Sign In */}
-          {user.isLoggedIn ? (
-            <button
-              aria-label={`Profile - ${user.name}`}
-              onClick={() => onNavigate('profile')}
-              className={`w-9 h-9 flex items-center justify-center rounded-full transition-all cursor-pointer relative ${
-                currentTab === 'profile'
-                  ? 'ring-2 ring-[#dbb8ff] ring-offset-2 ring-offset-[#121317]'
-                  : 'hover:ring-1 hover:ring-[#dbb8ff]/50'
-              }`}
-            >
-              <img
-                src={user.avatar}
-                alt={user.name}
-                className="w-8 h-8 rounded-full object-cover border border-white/10"
-              />
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#1db954] border-2 border-[#121317]"></span>
-            </button>
-          ) : (
-            <button
-              onClick={onOpenAuth}
-              className="px-3 py-1.5 rounded-full bg-gradient-to-r from-[#7928ca] to-[#dbb8ff] text-white text-xs font-bold shadow-md cursor-pointer hover:opacity-90 active:scale-95"
-            >
-              Sign In
-            </button>
-          )}
+          {/* User Profile Avatar */}
+          <button
+            aria-label={`Profile - ${user.name}`}
+            onClick={() => onNavigate('profile')}
+            className={`w-9 h-9 flex items-center justify-center rounded-full transition-all cursor-pointer relative ${
+              currentTab === 'profile'
+                ? 'ring-2 ring-[#dbb8ff] ring-offset-2 ring-offset-[#121317]'
+                : 'hover:ring-1 hover:ring-[#dbb8ff]/50'
+            }`}
+          >
+            <img
+              src={user.avatar}
+              alt={user.name}
+              className="w-8 h-8 rounded-full object-cover border border-white/10"
+            />
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#1db954] border-2 border-[#121317]"></span>
+          </button>
         </div>
       </div>
     </header>

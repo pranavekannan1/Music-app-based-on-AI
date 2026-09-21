@@ -14,7 +14,6 @@ import { BottomNav } from './components/BottomNav';
 import { MiniPlayer } from './components/MiniPlayer';
 import { NowPlayingModal } from './components/NowPlayingModal';
 import { QueueModal } from './components/QueueModal';
-import { AuthModal } from './components/AuthModal';
 import { AudioQualitySelector } from './components/AudioQualitySelector';
 import { AuthScreen } from './screens/AuthScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -31,7 +30,6 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [showNowPlayingModal, setShowNowPlayingModal] = useState<boolean>(false);
   const [showQueueModal, setShowQueueModal] = useState<boolean>(false);
-  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [showQualityModal, setShowQualityModal] = useState<boolean>(false);
   const [studioInitialPrompt, setStudioInitialPrompt] = useState<string | undefined>(undefined);
   const [progressPercent, setProgressPercent] = useState<number>(0);
@@ -306,7 +304,6 @@ export default function App() {
       <Header
         currentTab={currentTab}
         onNavigate={(tab) => setCurrentTab(tab)}
-        onOpenAuth={() => setShowAuthModal(true)}
         onOpenQuality={() => setShowQualityModal(true)}
       />
 
@@ -413,13 +410,6 @@ export default function App() {
           onClearUpcoming={handleClearUpcoming}
         />
       )}
-
-      {/* Sign Up / Login Auth Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onAuthSuccess={() => setShowAuthModal(false)}
-      />
 
       {/* Audio Quality Modal */}
       <AudioQualitySelector

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Track } from '../types';
+import { searchWorldwideCatalog } from '../services/musicService';
 
 interface StudioScreenProps {
   onStartSession: (tracks: Track[]) => void;
@@ -57,30 +58,65 @@ export const StudioScreen: React.FC<StudioScreenProps> = ({
     },
   ]);
 
-  const handleRefine = () => {
+  const handleRefine = async () => {
+    const prompt = promptText.trim();
+    if (!prompt) return;
+
     setIsGenerating(true);
-    setTelemetryProgress(35);
+    setTelemetryProgress(20);
 
-    setTimeout(() => {
-      setTelemetryProgress(75);
-    }, 600);
+    try {
+      const response = await fetch('/api/ai/music-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
 
-    setTimeout(() => {
+      setTelemetryProgress(50);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Unable to generate suggestions.');
+      }
+
+      const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+      const results = await Promise.all(
+        suggestions.slice(0, 8).map(async (suggestion: any) => {
+          const matches = await searchWorldwideCatalog(
+            suggestion.searchQuery || suggestion.title || prompt,
+            5
+          );
+          const track = matches[0];
+          if (!track) return null;
+          return {
+            ...track,
+            affinityNote: suggestion.reason || 'Matched to your AI prompt.',
+          } as Track;
+        })
+      );
+
+      const unique = Array.from(
+        new Map(
+          results
+            .filter((track): track is Track => Boolean(track))
+            .map((track) => [track.id, track])
+        ).values()
+      ).slice(0, 8);
+
+      if (unique.length > 0) {
+        setSessionTracks(unique);
+      } else {
+        throw new Error('No matching songs were found for this prompt. Try adding an artist, genre, mood, or activity.');
+      }
+
       setTelemetryProgress(100);
+    } catch (error: any) {
+      console.warn('AI music suggestion error:', error);
+      // Keep the existing UI/session instead of replacing it with fake songs.
+      setTelemetryProgress(100);
+    } finally {
       setIsGenerating(false);
-      setSessionTracks([
-        {
-          id: 'reflections-in-twilight',
-          title: 'Reflections in Twilight',
-          artist: 'Ólafur Arnalds',
-          album: 'Ambient Neo-Classical',
-          duration: '04:48',
-          coverUrl:
-            'https://lh3.googleusercontent.com/aida-public/AB6AXuCZUfZPANdQHGFEMBPGczHsdy6-Mx9VgiEs1eJH6zowXZ_qSyi4d8Jbvvj7XAr2zZ0N8vFSAmF8o4mJe9pM6ifiGAK5Zd2cL8tjHBLaCv-KTYoHySkszy2R-e0JkslKNcSg5eJ4eFd-uKk55sooeacyqQrbi0QeIXmMjQyitkQ1f5THn9gS_8LGH-NX_xExS2bZqoqHZu3RChsXJn8cgUgACB9WrBIyTtbN1tF0DBZfMgZT4ImxnpzxYA',
-        },
-        ...sessionTracks.slice(0, 2),
-      ]);
-    }, 1200);
+    }
   };
 
   const handleReshuffle = () => {
