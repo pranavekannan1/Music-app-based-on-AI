@@ -16,7 +16,6 @@ import {
 import { subscribeToFirebaseAuthState } from './services/firebase';
 
 import { Header } from './components/Header';
-import { PWAInstallButton } from './components/PWAInstallButton';
 import { BottomNav } from './components/BottomNav';
 import { MiniPlayer } from './components/MiniPlayer';
 import { NowPlayingModal } from './components/NowPlayingModal';
@@ -42,39 +41,29 @@ export default function App() {
     useState<Track>(DEFAULT_NOW_PLAYING_TRACK);
 
   const [isPlaying, setIsPlaying] =
-    useState(false);
+    useState<boolean>(false);
 
   const [showNowPlayingModal, setShowNowPlayingModal] =
-    useState(false);
+    useState<boolean>(false);
 
   const [showQueueModal, setShowQueueModal] =
-    useState(false);
+    useState<boolean>(false);
 
   const [showQualityModal, setShowQualityModal] =
-    useState(false);
+    useState<boolean>(false);
 
   const [studioInitialPrompt, setStudioInitialPrompt] =
     useState<string | undefined>(undefined);
 
   const [progressPercent, setProgressPercent] =
-    useState(0);
+    useState<number>(0);
 
   const [appTheme, setAppThemeState] =
     useState<AppTheme>(getAppTheme());
 
-  const [queue, setQueue] = useState<Track[]>([
-    DEFAULT_NOW_PLAYING_TRACK,
-  ]);
-
-  const [queueIndex, setQueueIndex] =
-    useState(0);
-
-  const queueRef = useRef<Track[]>(queue);
-  const queueIndexRef = useRef(queueIndex);
-
   /*
    * ------------------------------------------------------------
-   * FIREBASE AUTH STATE
+   * FIREBASE AUTHENTICATION
    * ------------------------------------------------------------
    */
 
@@ -83,15 +72,12 @@ export default function App() {
       subscribeToFirebaseAuthState((profile) => {
         if (profile) {
           setCurrentUser(profile);
-        } else {
-          setCurrentUser((previousUser) => ({
-            ...previousUser,
-            isLoggedIn: false,
-          }));
         }
       });
 
-    const handleAuthChange = (event: Event) => {
+    const handleAuthChange = (
+      event: Event
+    ) => {
       const customEvent =
         event as CustomEvent<UserAuthProfile>;
 
@@ -106,7 +92,9 @@ export default function App() {
     );
 
     return () => {
-      unsubscribe();
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
 
       window.removeEventListener(
         'sonic_auth_change',
@@ -117,26 +105,37 @@ export default function App() {
 
   /*
    * ------------------------------------------------------------
-   * QUEUE REFS
+   * ACTIVE PLAY QUEUE
    * ------------------------------------------------------------
    */
+
+  const [queue, setQueue] = useState<Track[]>([
+    DEFAULT_NOW_PLAYING_TRACK,
+  ]);
+
+  const [queueIndex, setQueueIndex] =
+    useState<number>(0);
+
+  const queueRef = useRef<Track[]>(queue);
+
+  const queueIndexRef =
+    useRef<number>(queueIndex);
 
   useEffect(() => {
     queueRef.current = queue;
-  }, [queue]);
-
-  useEffect(() => {
     queueIndexRef.current = queueIndex;
-  }, [queueIndex]);
+  }, [queue, queueIndex]);
 
   /*
    * ------------------------------------------------------------
-   * THEME
+   * THEME SYNCHRONIZATION
    * ------------------------------------------------------------
    */
 
   useEffect(() => {
-    const handleThemeChange = (event: Event) => {
+    const handleThemeChange = (
+      event: Event
+    ) => {
       const customEvent =
         event as CustomEvent<AppTheme>;
 
@@ -194,10 +193,6 @@ export default function App() {
           const nextTrack =
             currentQueue[nextIndex];
 
-          if (!nextTrack) {
-            return;
-          }
-
           setQueueIndex(nextIndex);
           setCurrentTrack(nextTrack);
           setProgressPercent(0);
@@ -205,47 +200,47 @@ export default function App() {
           addToRecentlyPlayed(nextTrack);
 
           audioEngine.playTrack(nextTrack);
+
           setIsPlaying(true);
+        } else {
+          const endlessTracks =
+            getEndlessQueueTracks(
+              currentQueue,
+              6
+            );
 
-          return;
+          if (endlessTracks.length === 0) {
+            setIsPlaying(false);
+            return;
+          }
+
+          const newQueue = [
+            ...currentQueue,
+            ...endlessTracks,
+          ];
+
+          const nextIndex =
+            currentIndex + 1;
+
+          const nextTrack =
+            newQueue[nextIndex];
+
+          if (!nextTrack) {
+            setIsPlaying(false);
+            return;
+          }
+
+          setQueue(newQueue);
+          setQueueIndex(nextIndex);
+          setCurrentTrack(nextTrack);
+          setProgressPercent(0);
+
+          addToRecentlyPlayed(nextTrack);
+
+          audioEngine.playTrack(nextTrack);
+
+          setIsPlaying(true);
         }
-
-        const endlessTracks =
-          getEndlessQueueTracks(
-            currentQueue,
-            6
-          );
-
-        if (endlessTracks.length === 0) {
-          setIsPlaying(false);
-          return;
-        }
-
-        const newQueue = [
-          ...currentQueue,
-          ...endlessTracks,
-        ];
-
-        const nextIndex =
-          currentIndex + 1;
-
-        const nextTrack =
-          newQueue[nextIndex];
-
-        if (!nextTrack) {
-          setIsPlaying(false);
-          return;
-        }
-
-        setQueue(newQueue);
-        setQueueIndex(nextIndex);
-        setCurrentTrack(nextTrack);
-        setProgressPercent(0);
-
-        addToRecentlyPlayed(nextTrack);
-
-        audioEngine.playTrack(nextTrack);
-        setIsPlaying(true);
       });
 
     return () => {
@@ -253,6 +248,116 @@ export default function App() {
       unsubscribeEnded();
     };
   }, []);
+
+  /*
+   * ------------------------------------------------------------
+   * MEDIA SESSION
+   * ------------------------------------------------------------
+   */
+
+  useEffect(() => {
+    audioEngine.setMediaSessionHandlers(
+      () => {
+        if (isPlaying) {
+          audioEngine.pause();
+          setIsPlaying(false);
+        } else {
+          audioEngine.playTrack(currentTrack);
+          setIsPlaying(true);
+        }
+      },
+
+      () => {
+        audioEngine.pause();
+        setIsPlaying(false);
+      },
+
+      () => {
+        handleNextTrack();
+      },
+
+      () => {
+        handlePrevTrack();
+      }
+    );
+  }, [isPlaying, currentTrack]);
+
+  /*
+   * ------------------------------------------------------------
+   * PLAY / PAUSE
+   * ------------------------------------------------------------
+   */
+
+  const togglePlay = () => {
+    if (isPlaying) {
+      audioEngine.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    audioEngine.playTrack(currentTrack);
+    setIsPlaying(true);
+  };
+
+  /*
+   * ------------------------------------------------------------
+   * PLAY TRACK
+   * ------------------------------------------------------------
+   */
+
+  const playTrack = (
+    track: Track,
+    newQueue?: Track[]
+  ) => {
+    setCurrentTrack(track);
+    setProgressPercent(0);
+
+    addToRecentlyPlayed(track);
+
+    if (
+      newQueue &&
+      newQueue.length > 0
+    ) {
+      setQueue(newQueue);
+
+      const foundIndex =
+        newQueue.findIndex(
+          (item) => item.id === track.id
+        );
+
+      setQueueIndex(
+        foundIndex >= 0
+          ? foundIndex
+          : 0
+      );
+    } else {
+      setQueue((previousQueue) => {
+        const existingIndex =
+          previousQueue.findIndex(
+            (item) => item.id === track.id
+          );
+
+        if (existingIndex >= 0) {
+          setQueueIndex(existingIndex);
+          return previousQueue;
+        }
+
+        const updatedQueue = [
+          ...previousQueue,
+          track,
+        ];
+
+        setQueueIndex(
+          updatedQueue.length - 1
+        );
+
+        return updatedQueue;
+      });
+    }
+
+    audioEngine.playTrack(track);
+    setIsPlaying(true);
+  };
 
   /*
    * ------------------------------------------------------------
@@ -280,10 +385,6 @@ export default function App() {
 
       const nextTrack =
         currentQueue[nextIndex];
-
-      if (!nextTrack) {
-        return;
-      }
 
       setQueueIndex(nextIndex);
       setCurrentTrack(nextTrack);
@@ -360,14 +461,12 @@ export default function App() {
     }
 
     const previousIndex =
-      Math.max(0, currentIndex - 1);
+      currentIndex <= 0
+        ? 0
+        : currentIndex - 1;
 
     const previousTrack =
       currentQueue[previousIndex];
-
-    if (!previousTrack) {
-      return;
-    }
 
     setQueueIndex(previousIndex);
     setCurrentTrack(previousTrack);
@@ -381,109 +480,7 @@ export default function App() {
 
   /*
    * ------------------------------------------------------------
-   * MEDIA SESSION
-   * ------------------------------------------------------------
-   */
-
-  useEffect(() => {
-    audioEngine.setMediaSessionHandlers(
-      () => {
-        if (isPlaying) {
-          audioEngine.pause();
-          setIsPlaying(false);
-        } else {
-          audioEngine.playTrack(currentTrack);
-          setIsPlaying(true);
-        }
-      },
-      () => {
-        audioEngine.pause();
-        setIsPlaying(false);
-      },
-      handleNextTrack,
-      handlePrevTrack
-    );
-  }, [isPlaying, currentTrack]);
-
-  /*
-   * ------------------------------------------------------------
-   * PLAY / PAUSE
-   * ------------------------------------------------------------
-   */
-
-  const togglePlay = () => {
-    if (isPlaying) {
-      audioEngine.pause();
-      setIsPlaying(false);
-      return;
-    }
-
-    audioEngine.playTrack(currentTrack);
-    setIsPlaying(true);
-  };
-
-  /*
-   * ------------------------------------------------------------
-   * PLAY TRACK
-   * ------------------------------------------------------------
-   */
-
-  const playTrack = (
-    track: Track,
-    newQueue?: Track[]
-  ) => {
-    setCurrentTrack(track);
-    setProgressPercent(0);
-
-    addToRecentlyPlayed(track);
-
-    if (
-      newQueue &&
-      newQueue.length > 0
-    ) {
-      const foundIndex =
-        newQueue.findIndex(
-          (item) => item.id === track.id
-        );
-
-      setQueue(newQueue);
-      setQueueIndex(
-        foundIndex >= 0
-          ? foundIndex
-          : 0
-      );
-    } else {
-      setQueue((previousQueue) => {
-        const existingIndex =
-          previousQueue.findIndex(
-            (item) => item.id === track.id
-          );
-
-        if (existingIndex >= 0) {
-          setQueueIndex(existingIndex);
-          return previousQueue;
-        }
-
-        const updatedQueue = [
-          ...previousQueue,
-          track,
-        ];
-
-        setQueueIndex(
-          updatedQueue.length - 1
-        );
-
-        return updatedQueue;
-      });
-    }
-
-    audioEngine.playTrack(track);
-    setIsPlaying(true);
-  };
-
-  /*
-   * ------------------------------------------------------------
-   * QUEUE
+   * QUEUE MANAGEMENT
    * ------------------------------------------------------------
    */
 
@@ -501,8 +498,8 @@ export default function App() {
         targetIndex <
         queueIndexRef.current
       ) {
-        setQueueIndex((index) =>
-          Math.max(0, index - 1)
+        setQueueIndex((currentIndex) =>
+          Math.max(0, currentIndex - 1)
         );
       }
 
@@ -541,7 +538,7 @@ export default function App() {
 
   /*
    * ------------------------------------------------------------
-   * AI STUDIO
+   * AI STUDIO SESSION
    * ------------------------------------------------------------
    */
 
@@ -573,7 +570,7 @@ export default function App() {
 
   /*
    * ------------------------------------------------------------
-   * LOGIN SCREEN
+   * AUTHENTICATION GATE
    * ------------------------------------------------------------
    */
 
@@ -597,7 +594,7 @@ export default function App() {
 
   /*
    * ------------------------------------------------------------
-   * MAIN APP
+   * MAIN SONICAI APPLICATION
    * ------------------------------------------------------------
    */
 
@@ -615,11 +612,6 @@ export default function App() {
           setShowQualityModal(true);
         }}
       />
-
-      {/* INSTALL APP */}
-      <div className="fixed top-[72px] right-4 z-40">
-        <PWAInstallButton />
-      </div>
 
       <main className="flex-1 w-full max-w-[1720px] mx-auto px-3 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-16 pb-28 transition-all duration-300">
         {currentTab === 'home' && (
@@ -693,7 +685,9 @@ export default function App() {
           onOpenStudio={() =>
             setCurrentTab('studio')
           }
-          progressPercent={progressPercent}
+          progressPercent={
+            progressPercent
+          }
         />
       )}
 
@@ -740,6 +734,7 @@ export default function App() {
             addToRecentlyPlayed(track);
 
             audioEngine.playTrack(track);
+
             setIsPlaying(true);
           }}
           onRemoveFromQueue={

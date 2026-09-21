@@ -12,26 +12,19 @@ export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
 
-  const [isInstalled, setIsInstalled] =
-    useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
 
-  const [isIOS, setIsIOS] =
-    useState(false);
-
-  const [isInstallSupported, setIsInstallSupported] =
-    useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
     const checkInstalled = () => {
-      const standalone =
-        window.matchMedia(
-          '(display-mode: standalone)'
-        ).matches ||
-        (window.navigator as Navigator & {
+      const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as {
           standalone?: boolean;
         }).standalone === true;
 
-      setIsInstalled(standalone);
+      setIsInstalled(isStandalone);
     };
 
     checkInstalled();
@@ -41,30 +34,21 @@ export function usePWAInstall() {
 
     const ios =
       /iphone|ipad|ipod/.test(userAgent) ||
-      (window.navigator.platform === 'MacIntel' &&
-        window.navigator.maxTouchPoints > 1);
+      (navigator.platform === 'MacIntel' &&
+        navigator.maxTouchPoints > 1);
 
     setIsIOS(ios);
 
-    /*
-     * If the browser supports the native
-     * beforeinstallprompt event, remember that.
-     */
     const handleBeforeInstallPrompt = (
       event: Event
     ) => {
       event.preventDefault();
 
-      const installEvent =
-        event as BeforeInstallPromptEvent;
-
-      setDeferredPrompt(installEvent);
-      setIsInstallSupported(true);
+      setDeferredPrompt(
+        event as BeforeInstallPromptEvent
+      );
     };
 
-    /*
-     * Fired after the app has been installed.
-     */
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
@@ -80,19 +64,6 @@ export function usePWAInstall() {
       handleAppInstalled
     );
 
-    /*
-     * Give Chrome/Edge time to fire
-     * beforeinstallprompt after the page loads.
-     */
-    const checkInstallSupport = window.setTimeout(() => {
-      if (
-        'BeforeInstallPromptEvent' in window ||
-        'onbeforeinstallprompt' in window
-      ) {
-        setIsInstallSupported(true);
-      }
-    }, 1500);
-
     return () => {
       window.removeEventListener(
         'beforeinstallprompt',
@@ -103,58 +74,44 @@ export function usePWAInstall() {
         'appinstalled',
         handleAppInstalled
       );
-
-      window.clearTimeout(
-        checkInstallSupport
-      );
     };
   }, []);
 
-  const install = async (): Promise<
-    'installed' | 'manual' | 'dismissed'
-  > => {
-    /*
-     * Native Chrome / Edge install prompt.
-     */
-    if (deferredPrompt) {
-      try {
-        await deferredPrompt.prompt();
-
-        const { outcome } =
-          await deferredPrompt.userChoice;
-
-        setDeferredPrompt(null);
-
-        if (outcome === 'accepted') {
-          setIsInstalled(true);
-          return 'installed';
-        }
-
-        return 'dismissed';
-      } catch (error) {
-        console.error(
-          'SonicAI PWA installation failed:',
-          error
-        );
-
-        setDeferredPrompt(null);
-        return 'manual';
-      }
+  const install = async (): Promise<boolean> => {
+    if (!deferredPrompt) {
+      return false;
     }
 
-    /*
-     * No native prompt is currently available.
-     * The button will show the browser-specific
-     * installation instructions instead.
-     */
-    return 'manual';
+    try {
+      await deferredPrompt.prompt();
+
+      const { outcome } =
+        await deferredPrompt.userChoice;
+
+      setDeferredPrompt(null);
+
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error(
+        'SonicAI PWA installation failed:',
+        error
+      );
+
+      setDeferredPrompt(null);
+      return false;
+    }
   };
 
   return {
     isInstallable: !!deferredPrompt,
     isInstalled,
     isIOS,
-    isInstallSupported,
     install,
   };
 }
+
