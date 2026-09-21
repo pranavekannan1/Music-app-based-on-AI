@@ -632,6 +632,23 @@ export async function getLatestMovieAlbums(language: string = 'all'): Promise<Mo
 }
 
 /**
+ * Live latest catalog. Results come from remote music catalogs and refresh automatically.
+ * No song list is stored in the frontend bundle.
+ */
+export async function getLiveLatestMusic(language: string = 'all'): Promise<{ songs: Track[]; albums: any[]; updatedAt?: string; providers?: string[] }> {
+  try {
+    const res = await apiFetch(`/api/music/latest?language=${encodeURIComponent(language)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) return { songs: data.songs || [], albums: data.albums || [], updatedAt: data.updatedAt, providers: data.providers || [] };
+    }
+  } catch (err) {
+    console.warn('Live latest catalog unavailable:', err);
+  }
+  return { songs: [], albums: [] };
+}
+
+/**
  * Retrieve YouTube Video details for a specific track (uses Groq + regex scraper fallback)
  */
 export async function getYouTubeVideoDetails(title: string, artist: string): Promise<{ videoId: string; videoTitle: string; channelName: string } | null> {

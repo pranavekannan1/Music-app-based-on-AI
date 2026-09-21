@@ -118,7 +118,7 @@ Keep suggestions diverse and directly relevant.`;
 });
 
 
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes: live catalog cache, no manual song updates needed
 
 // Helper to decode HTML entities in metadata
 function decodeHtml(html: string): string {
@@ -1295,6 +1295,56 @@ app.get('/api/music/trending', async (req, res) => {
 });
 
 // Dedicated Latest Movie Albums endpoint
+// Live latest catalog. Nothing is stored permanently in the app: every request refreshes
+// the provider catalog after the short cache expires, so newly released music can appear
+// without adding songs to source code or manually updating a database.
+app.get('/api/music/latest', async (req, res) => {
+  try {
+    const language = String(req.query.language || 'all').trim().toLowerCase();
+    const cacheKey = `live_latest_${language}`;
+    const cached = responseCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return res.json({ success: true, ...cached.data, live: true, cached: true });
+    }
+
+    const [saavnAlbumsR, deezerChartR, saavnSongsR] = await Promise.allSettled([
+      searchSaavnAlbums(language === 'all' ? 'latest new songs' : `latest ${language} songs`, 20),
+      fetchJson('https://api.deezer.com/chart/0/tracks?limit=30'),
+      searchSaavnSongs(language === 'all' ? 'latest songs' : `latest ${language} songs`, 20),
+    ]);
+
+    const liveSongs = new Map<string, RoyaltyFreeTrack>();
+    const saavnSongs = saavnSongsR.status === 'fulfilled' ? saavnSongsR.value : [];
+    const deezerSongs = deezerChartR.status === 'fulfilled'
+      ? ((deezerChartR.value?.data || []).map(mapDeezerTrack).filter(Boolean) as RoyaltyFreeTrack[])
+      : [];
+    for (const track of [...saavnSongs, ...deezerSongs]) {
+      const key = `${track.title.toLowerCase()}|${track.artist.toLowerCase()}`;
+      if (!liveSongs.has(key)) liveSongs.set(key, track);
+    }
+
+    const albums = saavnAlbumsR.status === 'fulfilled' ? saavnAlbumsR.value.slice(0, 20).map((a: any) => ({
+      id: `saavn_album_${a.id}`,
+      title: decodeHtml(a.title || 'Latest Album'),
+      image: String(a.image || '').replace('150x150', '500x500').replace('50x50', '500x500'),
+      artist: decodeHtml(a.music || a.subtitle || 'Various Artists'),
+      year: a.year ? String(a.year) : undefined,
+      sourceUrl: a.perma_url,
+    })) : [];
+
+    const data = {
+      songs: Array.from(liveSongs.values()).slice(0, 40),
+      albums,
+      updatedAt: new Date().toISOString(),
+      providers: ['JioSaavn', 'Deezer'],
+    };
+    responseCache.set(cacheKey, { data, timestamp: Date.now() });
+    return res.json({ success: true, ...data, live: true, cached: false });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, live: true, songs: [], albums: [], message: error?.message || 'Latest catalog unavailable' });
+  }
+});
+
 app.get('/api/music/new-movies', async (req, res) => {
   try {
     const lang = ((req.query.language as string) || 'all').toLowerCase();
@@ -1613,364 +1663,384 @@ app.get('/api/music/search', async (req, res) => {
   }
 });
 
-// Comprehensive Unified Grouped Search (Songs, Movies/Albums with songs, Artists with songs, and Playlists with songs)
-app.get('/api/music/search/grouped', async (req, res) => {
+// Multi-provider grouped search.
+// Primary metadata/search providers:
+// - Deezer: songs, artists, albums and public playlists; song previews when available.
+// - Apple iTunes Search API: songs and movies/TV/music metadata + previews.
+// - JioSaavn: especially useful for Indian songs and film soundtracks.
+// - MusicBrainz: artist/recording metadata fallback.
+// The app never needs a provider API key for the public search calls below.
+
+function safeDuration(seconds: any): string {
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n <= 0) return '03:30';
+  const m = Math.floor(n / 60);
+  const s = Math.floor(n % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function mapDeezerTrack(t: any): RoyaltyFreeTrack | null {
+  if (!t?.id || !t?.title) return null;
+  const artist = t.artist?.name || 'Unknown Artist';
+  const album = t.album?.title || 'Single';
+  const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || t.album?.cover;
+  return {
+    id: `deezer_${t.id}`,
+    title: decodeHtml(t.title_short || t.title),
+    artist: decodeHtml(artist),
+    album: decodeHtml(album),
+    duration: safeDuration(t.duration),
+    durationSec: Number(t.duration) || 210,
+    coverUrl: cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+    previewUrl: t.preview || undefined,
+    audioUrl: t.preview || undefined,
+    sourceUrl: t.link || undefined,
+    genre: 'Music',
+    country: 'Worldwide',
+    releaseYear: t.album?.release_date ? String(t.album.release_date).slice(0, 4) : undefined,
+    isFullSong: false,
+    isCopyrightSafe: false,
+    tags: ['deezer'],
+  };
+}
+
+function mapItunesSong(t: any): RoyaltyFreeTrack | null {
+  if (!t?.trackId || !t?.trackName) return null;
+  return {
+    id: `itunes_${t.trackId}`,
+    title: decodeHtml(t.trackName),
+    artist: decodeHtml(t.artistName || 'Unknown Artist'),
+    album: decodeHtml(t.collectionName || 'Single'),
+    duration: safeDuration((Number(t.trackTimeMillis) || 210000) / 1000),
+    durationSec: Math.round((Number(t.trackTimeMillis) || 210000) / 1000),
+    coverUrl: String(t.artworkUrl100 || '').replace('100x100', '600x600') || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+    previewUrl: t.previewUrl || undefined,
+    audioUrl: t.previewUrl || undefined,
+    sourceUrl: t.trackViewUrl || t.collectionViewUrl || undefined,
+    appleMusicUrl: t.trackViewUrl || t.collectionViewUrl || undefined,
+    genre: t.primaryGenreName || 'Music',
+    country: t.country || 'Worldwide',
+    releaseYear: t.releaseDate ? String(t.releaseDate).slice(0, 4) : undefined,
+    isFullSong: false,
+    isCopyrightSafe: false,
+    tags: ['itunes'],
+  };
+}
+
+async function fetchJson(url: string, timeout = 7000): Promise<any | null> {
   try {
-    const rawQ = ((req.query.q as string) || '').trim();
-    if (!rawQ) {
-      return res.json({
-        success: true,
-        query: '',
-        songs: VERIFIED_ROYALTY_FREE_TRACKS.slice(0, 10),
-        movies: [],
-        artists: [],
-        playlists: [],
-      });
-    }
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'SonicAI/1.0 (music search app)' },
+      signal: AbortSignal.timeout(timeout),
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
 
-    // Clean the search query of common noisy download terms to find exact matches easily
-    const cleanSearchQuery = rawQ
-      .replace(/\b(mp3|download|free|audio|full|hd|lyrics|video|song|songs|online|play|listen)\b/gi, '')
-      .replace(/[^\w\s\u0900-\u097F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F]/gi, '') // Support Hindi, Tamil, Telugu, Malayalam, Kannada unicode chars
-      .replace(/\s+/g, ' ')
-      .trim();
+async function searchDeezerSongs(query: string, limit = 20): Promise<RoyaltyFreeTrack[]> {
+  const data = await fetchJson(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 50)}`);
+  return (data?.data || []).map(mapDeezerTrack).filter(Boolean) as RoyaltyFreeTrack[];
+}
 
-    const q = rawQ.toLowerCase();
-    const cacheKey = `search_grouped_v4_${q}`;
+async function searchDeezerArtists(query: string, limit = 8): Promise<any[]> {
+  const data = await fetchJson(`https://api.deezer.com/search/artist?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 20)}`);
+  return data?.data || [];
+}
+
+async function searchDeezerAlbums(query: string, limit = 10): Promise<any[]> {
+  const data = await fetchJson(`https://api.deezer.com/search/album?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 20)}`);
+  return data?.data || [];
+}
+
+async function searchDeezerPlaylists(query: string, limit = 8): Promise<any[]> {
+  const data = await fetchJson(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 20)}`);
+  return data?.data || [];
+}
+
+async function fetchDeezerArtistTracks(artistId: string, limit = 15): Promise<RoyaltyFreeTrack[]> {
+  const data = await fetchJson(`https://api.deezer.com/artist/${encodeURIComponent(artistId)}/top?limit=${Math.min(limit, 50)}`);
+  return (data?.data || []).map(mapDeezerTrack).filter(Boolean) as RoyaltyFreeTrack[];
+}
+
+async function fetchDeezerAlbumTracks(albumId: string, limit = 30): Promise<RoyaltyFreeTrack[]> {
+  const data = await fetchJson(`https://api.deezer.com/album/${encodeURIComponent(albumId)}/tracks?limit=${Math.min(limit, 50)}`);
+  return (data?.data || []).map(mapDeezerTrack).filter(Boolean) as RoyaltyFreeTrack[];
+}
+
+async function fetchDeezerPlaylistTracks(playlistId: string, limit = 30): Promise<RoyaltyFreeTrack[]> {
+  const data = await fetchJson(`https://api.deezer.com/playlist/${encodeURIComponent(playlistId)}/tracks?limit=${Math.min(limit, 50)}`);
+  return (data?.data || []).map(mapDeezerTrack).filter(Boolean) as RoyaltyFreeTrack[];
+}
+
+async function searchItunesSongs(query: string, limit = 20): Promise<RoyaltyFreeTrack[]> {
+  const data = await fetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=${Math.min(limit, 50)}&country=IN`);
+  return (data?.results || []).map(mapItunesSong).filter(Boolean) as RoyaltyFreeTrack[];
+}
+
+async function searchItunesMovies(query: string, limit = 8): Promise<any[]> {
+  const data = await fetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=movie&limit=${Math.min(limit, 20)}&country=IN`);
+  return data?.results || [];
+}
+
+async function searchSaavnSongs(query: string, limit = 30): Promise<RoyaltyFreeTrack[]> {
+  try {
+    const data = await fetchJson(`https://www.jiosaavn.com/api.php?__call=search.getResults&_marker=0&api_version=4&_format=json&n=${Math.min(limit, 30)}&p=1&q=${encodeURIComponent(query)}`);
+    const ids = (data?.results || []).map((x: any) => x?.id).filter(Boolean).slice(0, Math.min(limit, 30));
+    return ids.length ? await fetchFullSaavnTracks(ids) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function searchSaavnAlbums(query: string, limit = 12): Promise<any[]> {
+  try {
+    const data = await fetchJson(`https://www.jiosaavn.com/api.php?__call=search.getAlbumResults&_marker=0&api_version=4&_format=json&n=${Math.min(limit, 20)}&p=1&q=${encodeURIComponent(query)}`);
+    return data?.results || [];
+  } catch {
+    return [];
+  }
+}
+
+async function searchSaavnPlaylists(query: string, limit = 8): Promise<any[]> {
+  try {
+    const data = await fetchJson(`https://www.jiosaavn.com/api.php?__call=search.getPlaylistResults&_marker=0&api_version=4&_format=json&n=${Math.min(limit, 20)}&p=1&q=${encodeURIComponent(query)}`);
+    return data?.results || [];
+  } catch {
+    return [];
+  }
+}
+
+function mapSaavnArtistFromTrack(track: RoyaltyFreeTrack): any | null {
+  if (!track.artist) return null;
+  return {
+    id: `saavn_artist_${encodeURIComponent(track.artist.toLowerCase())}`,
+    name: track.artist,
+    image: track.coverUrl,
+    role: 'Artist',
+    songs: [],
+  };
+}
+
+async function searchMusicBrainzArtists(query: string, limit = 6): Promise<any[]> {
+  const data = await fetchJson(`https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(query)}&fmt=json&limit=${Math.min(limit, 10)}`);
+  return data?.artists || [];
+}
+
+// Direct provider search endpoint. The frontend can use this for ordinary song search.
+app.get('/api/music/search', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 25));
+    if (!q) return res.json({ success: true, tracks: VERIFIED_ROYALTY_FREE_TRACKS.slice(0, limit) });
+
+    const cacheKey = `provider_search_v1_${q.toLowerCase()}_${limit}`;
     const cached = responseCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      return res.json({ success: true, ...cached.data });
+      return res.json({ success: true, tracks: cached.data });
     }
 
-    // Expand search terms for generic film queries
-    const searchTerms = [rawQ];
-    if (cleanSearchQuery && cleanSearchQuery !== rawQ) {
-      searchTerms.push(cleanSearchQuery);
-    }
-
-    if (/\b(recent|latest|new|day|film|movie|songs|song|soundtrack|hits|chart|top|2026|2025|2024)\b/i.test(q)) {
-      const stripped = q.replace(/\b(recent|latest|new|day|film|movie|songs|song|soundtrack|hits|chart|top|2026|2025|2024)\b/gi, '').trim();
-      if (stripped && stripped.length >= 2) {
-        searchTerms.push(stripped);
-      }
-      searchTerms.push(
-        'Latest Tamil Movie Songs',
-        'Latest Telugu Movie Songs',
-        'Latest Hindi Movie Songs',
-        'Latest Malayalam Movie Songs',
-        'Coolie',
-        'Vettaiyan',
-        'Pushpa 2',
-        'Lokah',
-        'Aavesham',
-        'Devara',
-        'GOAT'
-      );
-    }
-
-    const collectedPids = new Set<string>();
-    const rawAlbums: any[] = [];
-    const rawArtists: any[] = [];
-    const rawPlaylists: any[] = [];
-
-    // Parallel search tasks
-    const tasks = searchTerms.map(async (term) => {
-      try {
-        const [autoRes, searchRes, albRes] = await Promise.all([
-          fetch(`https://www.jiosaavn.com/api.php?__call=autocomplete.get&query=${encodeURIComponent(term)}&_format=json`, { signal: AbortSignal.timeout(3000) }),
-          fetch(`https://www.jiosaavn.com/api.php?__call=search.getResults&_marker=0&api_version=4&_format=json&n=12&p=1&q=${encodeURIComponent(term)}`, { signal: AbortSignal.timeout(3000) }),
-          fetch(`https://www.jiosaavn.com/api.php?__call=search.getAlbumResults&_marker=0&api_version=4&_format=json&n=6&p=1&q=${encodeURIComponent(term)}`, { signal: AbortSignal.timeout(3000) }),
-        ]);
-
-        if (autoRes.ok) {
-          const autoData = await autoRes.json();
-          (autoData.songs?.data || []).forEach((s: any) => s.id && collectedPids.add(s.id));
-          (autoData.albums?.data || []).forEach((alb: any) => {
-            rawAlbums.push(alb);
-            if (alb.more_info?.song_pids) {
-              alb.more_info.song_pids.split(',').forEach((p: string) => p.trim() && collectedPids.add(p.trim()));
-            }
-          });
-          (autoData.artists?.data || []).forEach((art: any) => rawArtists.push(art));
-          (autoData.playlists?.data || []).forEach((pl: any) => rawPlaylists.push(pl));
-        }
-
-        if (searchRes.ok) {
-          const searchData = await searchRes.json();
-          (searchData.results || []).forEach((s: any) => s.id && collectedPids.add(s.id));
-        }
-
-        if (albRes.ok) {
-          const albData = await albRes.json();
-          (albData.results || []).forEach((alb: any) => rawAlbums.push(alb));
-        }
-      } catch (e) {
-        // Handle task errors silently
-      }
-    });
-
-    await Promise.allSettled(tasks);
-
-    // Fetch direct JioSaavn songs, YouTube songs, iTunes songs, and Groq-discovered songs in parallel.
-    let directSongs: RoyaltyFreeTrack[] = [];
-    let ytTracks: RoyaltyFreeTrack[] = [];
-    let itunesTracks: RoyaltyFreeTrack[] = [];
-    let groundedTracks: RoyaltyFreeTrack[] = [];
-
-    const [saavnTracksRes, ytScrapedRes, itunesTracksRes, groundedTracksRes] = await Promise.allSettled([
-      collectedPids.size > 0 ? fetchFullSaavnTracks(Array.from(collectedPids).slice(0, 30)) : Promise.resolve([]),
-      scrapeYoutubeTracks(rawQ),
-      searchItunesTracks(rawQ),
-      discoverTracksWithGroq(rawQ),
+    const [deezer, itunes, saavn] = await Promise.allSettled([
+      searchDeezerSongs(q, limit),
+      searchItunesSongs(q, limit),
+      searchSaavnSongs(q, limit),
     ]);
 
-    if (saavnTracksRes.status === 'fulfilled') {
-      directSongs = saavnTracksRes.value;
-    }
-
-    if (ytScrapedRes.status === 'fulfilled' && ytScrapedRes.value && ytScrapedRes.value.length > 0) {
-      ytTracks = ytScrapedRes.value.map((v: any) => ({
-        id: `yt_${v.videoId}`,
-        title: cleanVideoTitle(v.title),
-        artist: v.author || 'Worldwide Artist',
-        album: 'YouTube Music',
-        duration: v.duration || '03:45',
-        durationSec: parseDurationToSec(v.duration),
-        coverUrl: `https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg`,
-        audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
-        sourceUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
-        genre: 'Worldwide Pop',
-        language: 'English',
-        isCopyrightSafe: true,
-        isRoyaltyFree: true,
-        isFullSong: true,
-        country: 'Worldwide',
-        tags: ['youtube', 'worldwide', 'latest'],
-      }));
-    }
-
-    if (itunesTracksRes.status === 'fulfilled') {
-      itunesTracks = itunesTracksRes.value;
-    }
-
-    if (groundedTracksRes.status === 'fulfilled') {
-      groundedTracks = groundedTracksRes.value;
-    }
-
-    // Merge Saavn tracks, iTunes tracks, YouTube tracks, and Groq tracks into directSongs
-    const mergedTracksMap = new Map<string, RoyaltyFreeTrack>();
-    groundedTracks.forEach(t => mergedTracksMap.set(t.id, t));
-    itunesTracks.forEach(t => {
-      if (!mergedTracksMap.has(t.id)) mergedTracksMap.set(t.id, t);
-    });
-    
-    // Interleave the rest
-    const maxLen = Math.max(directSongs.length, ytTracks.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (i < ytTracks.length) {
-        const t = ytTracks[i];
-        if (!mergedTracksMap.has(t.id)) mergedTracksMap.set(t.id, t);
-      }
-      if (i < directSongs.length) {
-        const t = directSongs[i];
-        if (!mergedTracksMap.has(t.id)) mergedTracksMap.set(t.id, t);
-      }
-    }
-    
-    directSongs = Array.from(mergedTracksMap.values());
-
-
-    // Deduplicate and resolve album songs in parallel
-    const uniqueAlbums = new Map<string, any>();
-    rawAlbums.forEach((alb) => {
-      const key = (alb.id || alb.title || '').toLowerCase();
-      if (key && !uniqueAlbums.has(key)) uniqueAlbums.set(key, alb);
-    });
-
-    const albumTasks = Array.from(uniqueAlbums.values()).slice(0, 4).map(async (alb) => {
-      const albumDetails = await fetchAlbumSongs(alb.id, alb.title);
-      return {
-        id: alb.id || `album_${alb.title}`,
-        title: decodeHtml(alb.title),
-        image: (alb.image || albumDetails.image || '').replace('150x150', '500x500').replace('50x50', '500x500'),
-        artist: decodeHtml(alb.music || alb.description || albumDetails.artist || 'Movie Soundtrack'),
-        year: albumDetails.year || alb.year || '2026',
-        songCount: albumDetails.songs.length || 1,
-        songs: albumDetails.songs,
-      };
-    });
-
-    // Deduplicate and resolve artist tracks in parallel
-    const uniqueArtists = new Map<string, any>();
-    rawArtists.forEach((art) => {
-      const key = (art.id || art.title || '').toLowerCase();
-      if (key && !uniqueArtists.has(key)) uniqueArtists.set(key, art);
-    });
-
-    const artistTasks = Array.from(uniqueArtists.values()).slice(0, 4).map(async (art) => {
-      const artistSongs = await fetchArtistTracks(art.title);
-      return {
-        id: art.id || `artist_${art.title}`,
-        name: decodeHtml(art.title),
-        image: (art.image || '').replace('50x50', '500x500'),
-        role: decodeHtml(art.description || 'Singer / Composer'),
-        songs: artistSongs,
-      };
-    });
-
-    // Deduplicate and resolve playlist tracks in parallel
-    const uniquePlaylists = new Map<string, any>();
-    rawPlaylists.forEach((pl) => {
-      const key = (pl.id || pl.title || '').toLowerCase();
-      if (key && !uniquePlaylists.has(key)) uniquePlaylists.set(key, pl);
-    });
-
-    const playlistTasks = Array.from(uniquePlaylists.values()).slice(0, 4).map(async (pl) => {
-      const playlistDetails = await fetchPlaylistSongs(pl.id, pl.title);
-      return {
-        id: pl.id || `pl_${pl.title}`,
-        title: decodeHtml(pl.title),
-        image: (pl.image || playlistDetails.image || '').replace('50x50', '500x500'),
-        trackCount: playlistDetails.trackCount || playlistDetails.songs.length,
-        songs: playlistDetails.songs,
-      };
-    });
-
-    const [movieResultsSettled, artistResultsSettled, playlistResultsSettled, ytPlaylists] = await Promise.all([
-      Promise.allSettled(albumTasks),
-      Promise.allSettled(artistTasks),
-      Promise.allSettled(playlistTasks),
-      scrapeYoutubePlaylists(rawQ).catch(() => [])
-    ]);
-
-    const movieResults = movieResultsSettled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value);
-    const artistResults = artistResultsSettled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value);
-    const playlistResults = playlistResultsSettled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value);
-
-    // Merge scraped YouTube playlists into playlistResults beautifully
-    if (ytPlaylists && ytPlaylists.length > 0) {
-      const formattedYtPls = ytPlaylists.map((pl) => ({
-        id: pl.id,
-        title: pl.title,
-        image: `https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80`, // Elegant high-quality design background
-        trackCount: pl.videoCount || 20,
-        songs: [] // Fetched dynamically when clicked
-      }));
-      playlistResults.unshift(...formattedYtPls);
-    }
-
-    // Local fallback matches
-    const localMatches = VERIFIED_ROYALTY_FREE_TRACKS.filter(
-      (t) =>
-        t.title.toLowerCase().includes(q) ||
-        t.artist.toLowerCase().includes(q) ||
-        t.album?.toLowerCase().includes(q) ||
-        t.genre?.toLowerCase().includes(q) ||
-        t.tags?.some((tag) => tag.toLowerCase().includes(q))
-    );
-
-    for (const lt of localMatches) {
-      if (!directSongs.some((r) => r.id === lt.id)) {
-        directSongs.push(lt);
+    const merged = new Map<string, RoyaltyFreeTrack>();
+    for (const r of [deezer, itunes, saavn]) {
+      if (r.status === 'fulfilled') for (const track of r.value) if (track?.title) {
+        const key = `${track.title.toLowerCase()}|${track.artist.toLowerCase()}`;
+        if (!merged.has(key)) merged.set(key, track);
       }
     }
 
-    if (directSongs.length === 0) {
-      // Use Groq to procedurally generate a high-fidelity representation of the requested song
-      if (process.env.GROQ_API_KEY) {
-        try {
-          const prompt = `The user searched for a song: "${rawQ}". This song was not found in the instant index. Generate the real, authentic metadata for this song.
-Return a JSON object:
-{
-  "title": "Clean, correctly-capitalized song title",
-  "artist": "Clean primary singer or band name",
-  "album": "Real album or movie name",
-  "coverUrl": "An elegant music-themed unsplash image URL like https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80",
-  "genre": "The real genre (e.g., Pop, Bollywood, Rock, Classical)",
-  "language": "The real song language"
-}
-Only return raw JSON. No markdown backticks. No explanation.`;
-          const response = await askGroq(prompt);
-
-          if (response) {
-            const parsed = JSON.parse(response.trim());
-            if (parsed && parsed.title) {
-              const durSec = 220;
-              const cleanCover = parsed.coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80';
-              directSongs.push({
-                id: `ai_procedural_${Date.now()}`,
-                title: parsed.title,
-                artist: parsed.artist,
-                album: parsed.album || 'Single',
-                duration: '03:40',
-                durationSec: durSec,
-                coverUrl: cleanCover,
-                audioUrl: '', // Triggers the audioEngine's generative ambient soundscape synthesis seamlessly
-                genre: parsed.genre || 'AI Synthesized',
-                language: parsed.language || 'English',
-                isCopyrightSafe: true,
-                isRoyaltyFree: true,
-                isFullSong: true,
-                country: 'Worldwide',
-                tags: ['ai-synthesized', 'ambient', 'latest', 'custom-generated'],
-              });
-            }
-          }
-        } catch (e) {
-          console.warn('AI procedural song metadata generation failed:', e);
-        }
-      }
-    }
-
-    // Fallback card fillers if empty
-    if (movieResults.length === 0) {
-      const albumMap = new Map<string, RoyaltyFreeTrack[]>();
-      [...directSongs, ...localMatches].forEach((t) => {
-        if (t.album && t.album !== 'Single' && t.album !== 'Live Broadcast') {
-          const list = albumMap.get(t.album) || [];
-          list.push(t);
-          albumMap.set(t.album, list);
-        }
-      });
-      albumMap.forEach((songs, albumName) => {
-        movieResults.push({
-          id: `movie_${albumName}`,
-          title: albumName,
-          image: songs[0]?.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
-          artist: songs[0]?.artist || 'Soundtrack Artists',
-          year: '2026',
-          songCount: songs.length,
-          songs,
-        });
-      });
-    }
-
-    if (playlistResults.length === 0) {
-      playlistResults.push({
-        id: `pl_curated_${q}`,
-        title: `Curated "${rawQ}" Collection`,
-        image: directSongs[0]?.coverUrl || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
-        trackCount: directSongs.length,
-        songs: directSongs.slice(0, 8),
-      });
-    }
-
-    const payload = {
-      query: rawQ,
-      songs: directSongs.slice(0, 40),
-      movies: movieResults.slice(0, 5),
-      artists: artistResults.slice(0, 5),
-      playlists: playlistResults.slice(0, 5),
-    };
-
-    responseCache.set(cacheKey, { data: payload, timestamp: Date.now() });
-    res.json({ success: true, ...payload });
+    const tracks = Array.from(merged.values()).slice(0, limit);
+    responseCache.set(cacheKey, { data: tracks, timestamp: Date.now() });
+    return res.json({ success: true, query: q, tracks });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message, songs: [], movies: [], artists: [], playlists: [] });
+    return res.status(500).json({ success: false, message: error?.message || 'Search failed', tracks: [] });
   }
 });
 
-// Single Album/Movie Details endpoint
+// Full grouped search: Songs + Movies/Albums + Artists + Playlists.
+app.get('/api/music/search/grouped', async (req, res) => {
+  try {
+    const rawQ = String(req.query.q || '').trim();
+    if (!rawQ) return res.json({ success: true, query: '', songs: VERIFIED_ROYALTY_FREE_TRACKS.slice(0, 12), movies: [], artists: [], playlists: [] });
+
+    const cacheKey = `grouped_provider_v2_${rawQ.toLowerCase()}`;
+    const cached = responseCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return res.json({ success: true, ...cached.data });
+
+    const [songsR, saavnSongsR, artistsR, playlistsR, saavnPlaylistsR, albumsR, saavnAlbumsR, moviesR, itunesSongsR, mbArtistsR] = await Promise.allSettled([
+      searchDeezerSongs(rawQ, 25),
+      searchSaavnSongs(rawQ, 25),
+      searchDeezerArtists(rawQ, 8),
+      searchDeezerPlaylists(rawQ, 8),
+      searchSaavnPlaylists(rawQ, 8),
+      searchDeezerAlbums(rawQ, 8),
+      searchSaavnAlbums(rawQ, 8),
+      searchItunesMovies(rawQ, 8),
+      searchItunesSongs(rawQ, 15),
+      searchMusicBrainzArtists(rawQ, 6),
+    ]);
+
+    const deezerSongs: RoyaltyFreeTrack[] = songsR.status === 'fulfilled' ? songsR.value : [];
+    const saavnSongs: RoyaltyFreeTrack[] = saavnSongsR.status === 'fulfilled' ? saavnSongsR.value : [];
+    const itunesSongs: RoyaltyFreeTrack[] = itunesSongsR.status === 'fulfilled' ? itunesSongsR.value : [];
+    const songMap = new Map<string, RoyaltyFreeTrack>();
+    for (const track of [...deezerSongs, ...saavnSongs, ...itunesSongs]) {
+      if (!track?.title) continue;
+      const key = `${track.title.toLowerCase().replace(/[^a-z0-9]+/g, '')}|${track.artist.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
+      if (!songMap.has(key)) songMap.set(key, track);
+    }
+    const songs: RoyaltyFreeTrack[] = Array.from(songMap.values());
+    const deezerArtists = artistsR.status === 'fulfilled' ? artistsR.value : [];
+    const deezerPlaylists = playlistsR.status === 'fulfilled' ? playlistsR.value : [];
+    const saavnPlaylists = saavnPlaylistsR.status === 'fulfilled' ? saavnPlaylistsR.value : [];
+    const deezerAlbums = albumsR.status === 'fulfilled' ? albumsR.value : [];
+    const saavnAlbums = saavnAlbumsR.status === 'fulfilled' ? saavnAlbumsR.value : [];
+    const itunesMovies = moviesR.status === 'fulfilled' ? moviesR.value : [];
+    const mbArtists = mbArtistsR.status === 'fulfilled' ? mbArtistsR.value : [];
+
+    const movies: any[] = [];
+
+    // Deezer albums are useful for music/movie soundtracks, especially Indian film albums.
+    for (const album of deezerAlbums.slice(0, 8)) {
+      const albumSongs = await fetchDeezerAlbumTracks(String(album.id), 30);
+      movies.push({
+        id: `album_${album.id}`,
+        title: album.title || 'Album',
+        image: album.cover_xl || album.cover_big || album.cover_medium || '',
+        artist: album.artist?.name || 'Various Artists',
+        year: album.release_date ? String(album.release_date).slice(0, 4) : undefined,
+        songCount: albumSongs.length,
+        songs: albumSongs,
+      });
+    }
+
+    // JioSaavn albums are particularly useful for Indian movie soundtracks.
+    for (const album of saavnAlbums.slice(0, 8)) {
+      const albumSongs = await fetchAlbumSongs(String(album.id), album.title);
+      movies.push({
+        id: `saavn_album_${album.id}`,
+        title: decodeHtml(album.title || 'Movie Album'),
+        image: String(album.image || albumSongs.image || '').replace('150x150', '500x500').replace('50x50', '500x500'),
+        artist: decodeHtml(album.music || album.subtitle || albumSongs.artist || 'Movie Soundtrack'),
+        year: album.year ? String(album.year) : undefined,
+        songCount: albumSongs.songs.length,
+        songs: albumSongs.songs,
+        sourceUrl: album.perma_url,
+      });
+    }
+
+    // iTunes gives an independent movie catalog. It is metadata/previews, not full movie streaming.
+    for (const movie of itunesMovies.slice(0, 6)) {
+      const movieTitle = movie.trackName || movie.collectionName || 'Movie';
+      const movieSongs = songs.filter(s =>
+        s.album?.toLowerCase().includes(movieTitle.toLowerCase()) ||
+        movieTitle.toLowerCase().includes(s.album?.toLowerCase() || '__never__')
+      ).slice(0, 15);
+      movies.push({
+        id: `itunes_movie_${movie.trackId || movie.collectionId || encodeURIComponent(movieTitle)}`,
+        title: movieTitle,
+        image: String(movie.artworkUrl100 || '').replace('100x100', '600x600'),
+        artist: movie.artistName || movie.primaryGenreName || 'Movie',
+        year: movie.releaseDate ? String(movie.releaseDate).slice(0, 4) : undefined,
+        songCount: movieSongs.length,
+        songs: movieSongs,
+        sourceUrl: movie.trackViewUrl || movie.collectionViewUrl,
+      });
+    }
+
+    const artistMap = new Map<string, any>();
+    for (const artist of deezerArtists) {
+      const tracks = await fetchDeezerArtistTracks(String(artist.id), 15);
+      artistMap.set(String(artist.id), {
+        id: `artist_${artist.id}`,
+        name: artist.name,
+        image: artist.picture_xl || artist.picture_big || artist.picture_medium || '',
+        role: 'Artist',
+        followerCount: artist.nb_fan ? String(artist.nb_fan) : undefined,
+        songs: tracks,
+      });
+    }
+    // Even when an artist-specific provider endpoint is unavailable, live song results still give us artist entries.
+    for (const track of songs.slice(0, 30)) {
+      const artist = mapSaavnArtistFromTrack(track);
+      if (!artist || !artist.name) continue;
+      const key = artist.name.toLowerCase();
+      if (!Array.from(artistMap.values()).some(a => a.name?.toLowerCase() === key)) {
+        artist.songs = songs.filter(t => t.artist.toLowerCase().includes(key)).slice(0, 15);
+        artistMap.set(artist.id, artist);
+      }
+    }
+
+    for (const artist of mbArtists) {
+      const key = String(artist.name || '').toLowerCase();
+      if (!key || Array.from(artistMap.values()).some(a => a.name?.toLowerCase() === key)) continue;
+      artistMap.set(`mb_${artist.id}`, {
+        id: `artist_mb_${artist.id}`,
+        name: artist.name,
+        image: '',
+        role: artist.type || 'Artist',
+        songs: songs.filter(s => s.artist.toLowerCase().includes(key)).slice(0, 15),
+      });
+    }
+
+    const playlists: any[] = [];
+    for (const playlist of deezerPlaylists.slice(0, 8)) {
+      const tracks = await fetchDeezerPlaylistTracks(String(playlist.id), 30);
+      playlists.push({
+        id: `playlist_${playlist.id}`,
+        title: playlist.title || 'Playlist',
+        image: playlist.picture_xl || playlist.picture_big || playlist.picture_medium || '',
+        trackCount: playlist.nb_tracks || tracks.length,
+        description: playlist.description || `Public playlist matching ${rawQ}`,
+        songs: tracks,
+      });
+    }
+
+    // Public JioSaavn playlists, when exposed by the provider search endpoint.
+    for (const playlist of saavnPlaylists.slice(0, 8)) {
+      const playlistId = playlist.id || playlist.pid;
+      if (!playlistId) continue;
+      const tracks = await fetchPlaylistSongs(String(playlistId), playlist.title || rawQ);
+      playlists.push({
+        id: `saavn_playlist_${playlistId}`,
+        title: decodeHtml(playlist.title || 'Playlist'),
+        image: String(playlist.image || '').replace('150x150', '500x500').replace('50x50', '500x500'),
+        trackCount: tracks.songs.length,
+        description: decodeHtml(playlist.subtitle || playlist.description || `Live playlist matching ${rawQ}`),
+        songs: tracks.songs,
+        sourceUrl: playlist.perma_url,
+      });
+    }
+
+    // If providers are temporarily unavailable, preserve useful local results.
+    const local = VERIFIED_ROYALTY_FREE_TRACKS.filter(t =>
+      [t.title, t.artist, t.album || '', t.genre || '', ...(t.tags || [])].some(v => v.toLowerCase().includes(rawQ.toLowerCase()))
+    );
+    const finalSongs = songs.length ? songs : local;
+
+    const data = {
+      query: rawQ,
+      songs: finalSongs.slice(0, 25),
+      movies: movies.filter((m, i, arr) => m.title && arr.findIndex(x => x.title?.toLowerCase() === m.title.toLowerCase()) === i).slice(0, 12),
+      artists: Array.from(artistMap.values()).slice(0, 10),
+      playlists: playlists.slice(0, 10),
+    };
+
+    responseCache.set(cacheKey, { data, timestamp: Date.now() });
+    return res.json({ success: true, ...data });
+  } catch (error: any) {
+    console.error('Grouped provider search failed:', error);
+    return res.status(500).json({ success: false, message: error?.message || 'Grouped search failed', query: String(req.query.q || ''), songs: [], movies: [], artists: [], playlists: [] });
+  }
+});
+
 app.get('/api/music/album', async (req, res) => {
   try {
     const id = (req.query.id as string) || '';
