@@ -251,6 +251,18 @@ export default function App() {
   }, []);
 
   /*
+   * Pre-resolve the full-length source for the next queued track, so
+   * auto-advance starts instantly (matters most on mobile browsers that
+   * are strict about audio starting long after a tap).
+   */
+  useEffect(() => {
+    const nextTrack = queue[queueIndex + 1];
+    if (nextTrack) {
+      audioEngine.warmYouTubeMatch(nextTrack);
+    }
+  }, [queue, queueIndex]);
+
+  /*
    * ------------------------------------------------------------
    * MEDIA SESSION
    * ------------------------------------------------------------

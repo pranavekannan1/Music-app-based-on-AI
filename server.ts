@@ -2298,9 +2298,9 @@ async function searchYoutubeApi(query: string, apiKey: string): Promise<any[]> {
 }
 
 // Robust YouTube song-only search (combines official API if key provided + music scraper)
-async function scrapeYoutubeTracks(query: string): Promise<any[]> {
+async function scrapeYoutubeTracks(query: string, opts: { skipApi?: boolean } = {}): Promise<any[]> {
   const ytApiKey = process.env.VITE_YOUTUBE_API_KEY || process.env.YOUTUBE_API_KEY;
-  if (ytApiKey && ytApiKey !== 'your_youtube_api_key_here') {
+  if (!opts.skipApi && ytApiKey && ytApiKey !== 'your_youtube_api_key_here') {
     const apiResults = await searchYoutubeApi(query, ytApiKey);
     if (apiResults.length > 0) return apiResults;
   }
@@ -2365,6 +2365,8 @@ async function scrapeYoutubeTracks(query: string): Promise<any[]> {
                   title: cleanVideoTitle(title),
                   author,
                   duration,
+                  // 0 = YouTube gave no length (e.g. live stream); `duration` above is only a display default.
+                  durationSec: vr.lengthText?.simpleText ? parseDurationToSec(vr.lengthText.simpleText) : 0,
                   thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
                 });
                 if (results.length >= 25) break;
@@ -2396,9 +2398,11 @@ async function scrapeYoutubeTracks(query: string): Promise<any[]> {
           seen.add(videoId);
 
           let duration = '04:15';
-          const simpleDurMatch = match[2].match(/"simpleText":"(\d+:\d+)"/);
+          let durationSec = 0;
+          const simpleDurMatch = match[2].match(/"simpleText":"(\d+:\d+(?::\d+)?)"/);
           if (simpleDurMatch && simpleDurMatch[1]) {
             duration = simpleDurMatch[1];
+            durationSec = parseDurationToSec(simpleDurMatch[1]);
           }
           
           results.push({
@@ -2406,6 +2410,7 @@ async function scrapeYoutubeTracks(query: string): Promise<any[]> {
             title: cleanVideoTitle(title),
             author: channel,
             duration,
+            durationSec,
             thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
           });
           if (results.length >= 25) break;
@@ -2604,6 +2609,226 @@ app.get('/api/music/resolve-yt-audio', async (req, res) => {
     return res.redirect('https://upload.wikimedia.org/wikipedia/commons/1/14/Sitar_sample_yaman.ogg');
   } catch (error: any) {
     return res.redirect('https://upload.wikimedia.org/wikipedia/commons/1/14/Sitar_sample_yaman.ogg');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Full-length playback for preview-only catalog tracks (iTunes / Deezer)
+// ---------------------------------------------------------------------------
+// iTunes and Deezer only expose ~30s previews. For those tracks the client asks
+// this endpoint for matching YouTube video IDs and plays the best one through
+// the official YouTube IFrame Player (free, no key needed for playback).
+//   - With YOUTUBE_API_KEY set: Data API v3 search (embeddable videos only) +
+//     videos.list for real durations. Free quota is 10,000 units/day and a
+//     search costs 100, so ~100 uncached lookups/day; results are cached 24h.
+//   - No key, or quota exhausted: falls back to the existing YouTube scraper.
+// Candidates are ranked by title/artist/duration so a live set, cover or
+// slowed edit doesn't beat the real song. The client tries them in order.
+
+interface YtMatchCandidate {
+  videoId: string;
+  title: string;
+  channel: string;
+  durationSec: number; // 0 = unknown
+}
+
+const YT_MATCH_TTL_MS = 24 * 60 * 60 * 1000;
+const YT_MATCH_EMPTY_TTL_MS = 5 * 60 * 1000;
+const YT_MATCH_CACHE_MAX = 5000;
+const ytMatchCache = new Map<string, { data: YtMatchCandidate[]; timestamp: number; ttl: number }>();
+
+function parseIsoDurationToSec(iso: string): number {
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso || '');
+  if (!m) return 0;
+  return Number(m[1] || 0) * 86400 + Number(m[2] || 0) * 3600 + Number(m[3] || 0) * 60 + Number(m[4] || 0);
+}
+
+function normForMatch(s: string): string {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// "Chikitu (From \"Coolie\")" -> "Chikitu"; "Song - Remastered 2011" -> "Song"
+function cleanTitleForMatch(title: string): string {
+  return (title || '')
+    .replace(/[\(\[][^\)\]]*[\)\]]/g, ' ')
+    .replace(/\s[-–—]\s.*(?:remaster|version|edit|mix|from\b|feat|live).*$/i, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// A different version of the song: never a valid match unless the catalog title says so too.
+const YT_MATCH_REJECT_TERMS = [
+  'cover', 'remix', 'karaoke', 'slowed', 'reverb', 'sped up', 'speed up', '8d', 'nightcore',
+  'instrumental', 'mashup', 'reaction', 'tutorial', 'ringtone', 'status', 'lofi', 'lo fi', 'bass boosted',
+];
+
+function rankYtCandidates(
+  cands: YtMatchCandidate[],
+  title: string,
+  artist: string,
+  durationSec: number,
+): YtMatchCandidate[] {
+  const wantTitle = normForMatch(cleanTitleForMatch(title) || title);
+  const wantTitleFull = ` ${normForMatch(title)} `;
+  const wantArtistTokens = normForMatch(artist).split(' ').filter((w) => w.length > 2);
+  const titleTokens = wantTitle.split(' ').filter((w) => w.length > 1 || (w && w.charCodeAt(0) > 127));
+
+  const scored: { c: YtMatchCandidate; score: number }[] = [];
+  const seen = new Set<string>();
+
+  for (const c of cands) {
+    if (!c.videoId || seen.has(c.videoId)) continue;
+    seen.add(c.videoId);
+
+    const candTitle = normForMatch(c.title);
+    const candChannel = normForMatch(c.channel);
+    const hay = `${candTitle} ${candChannel}`;
+
+    // Must actually be this song: most title words present.
+    const hit = titleTokens.length ? titleTokens.filter((t) => hay.includes(t)).length / titleTokens.length : 1;
+    if (hit < 0.6) continue;
+
+    let score = hit * 50;
+    if (wantArtistTokens.some((t) => hay.includes(t))) score += 20;
+    if (candChannel.endsWith(' topic')) score += 15; // YouTube auto-generated official audio
+    if (/\b(official|audio|full song)\b/.test(candTitle)) score += 5;
+
+    if (durationSec > 0 && c.durationSec > 0) {
+      const diff = Math.abs(c.durationSec - durationSec);
+      if (diff > Math.max(45, durationSec * 0.35)) continue; // 10h loops, live sets, mashups
+      score += diff <= 5 ? 35 : diff <= 15 ? 20 : diff <= 30 ? 8 : 0;
+    }
+
+    const padded = ` ${candTitle} `;
+    const isWrongVersion = YT_MATCH_REJECT_TERMS.some(
+      (term) => padded.includes(` ${term} `) && !wantTitleFull.includes(` ${term} `),
+    );
+    if (isWrongVersion) continue;
+    // A live recording is the right song but a worse fit: keep it as a last resort.
+    if (padded.includes(' live ') && !wantTitleFull.includes(' live ')) score -= 35;
+
+    scored.push({ c, score });
+  }
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .filter((x) => x.score > 0)
+    .slice(0, 4)
+    .map((x) => x.c);
+}
+
+async function searchYoutubeApiForMatch(query: string, apiKey: string): Promise<YtMatchCandidate[]> {
+  try {
+    const searchUrl =
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10` +
+      `&videoEmbeddable=true&videoSyndicated=true&maxResults=8&q=${encodeURIComponent(query)}&key=${apiKey}`;
+    const sRes = await fetch(searchUrl, { signal: AbortSignal.timeout(5000) });
+    if (!sRes.ok) return []; // e.g. 403 quotaExceeded -> caller falls back to the scraper
+    const sData = await sRes.json();
+    const items = (sData.items || []).filter((i: any) => i?.id?.videoId && i.snippet);
+    if (items.length === 0) return [];
+
+    const ids = items.map((i: any) => i.id.videoId).join(',');
+    const details = new Map<string, { durationSec: number; embeddable: boolean }>();
+    try {
+      const vRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,status&id=${ids}&key=${apiKey}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        for (const v of vData.items || []) {
+          details.set(v.id, {
+            durationSec: parseIsoDurationToSec(v.contentDetails?.duration || ''),
+            embeddable: v.status?.embeddable !== false,
+          });
+        }
+      }
+    } catch {
+      // durations are a ranking aid only; carry on without them
+    }
+
+    return items
+      .filter((i: any) => details.get(i.id.videoId)?.embeddable !== false)
+      .map((i: any) => ({
+        videoId: i.id.videoId as string,
+        title: decodeHtml(i.snippet.title || ''),
+        channel: decodeHtml(i.snippet.channelTitle || ''),
+        durationSec: details.get(i.id.videoId)?.durationSec || 0,
+      }));
+  } catch (err) {
+    console.warn('YouTube API match search failed:', err);
+    return [];
+  }
+}
+
+async function matchYoutubeForTrack(title: string, artist: string, durationSec: number): Promise<YtMatchCandidate[]> {
+  const cleanTitle = cleanTitleForMatch(title) || title;
+  const firstArtist = (artist || '').split(/,|&|\bfeat\.?\b|\bft\.?\b/i)[0].trim();
+  const query = `${cleanTitle} ${firstArtist}`.trim();
+
+  const apiKey = process.env.YOUTUBE_API_KEY || process.env.VITE_YOUTUBE_API_KEY;
+  let ranked: YtMatchCandidate[] = [];
+
+  if (apiKey && apiKey !== 'your_youtube_api_key_here') {
+    const fromApi = await searchYoutubeApiForMatch(`${query} audio`, apiKey);
+    ranked = rankYtCandidates(fromApi, title, artist, durationSec);
+  }
+
+  if (ranked.length === 0) {
+    const scraped = await scrapeYoutubeTracks(query, { skipApi: true });
+    const fromScraper: YtMatchCandidate[] = scraped.map((v: any) => ({
+      videoId: v.videoId,
+      title: v.title || '',
+      channel: v.author || '',
+      durationSec: Number(v.durationSec) || 0,
+    }));
+    ranked = rankYtCandidates(fromScraper, title, artist, durationSec);
+  }
+
+  return ranked;
+}
+
+app.get('/api/music/yt-match', async (req, res) => {
+  try {
+    const title = String(req.query.title || '').trim().slice(0, 200);
+    const artist = String(req.query.artist || '').trim().slice(0, 200);
+    const durationSec = Math.max(0, parseInt(String(req.query.duration || ''), 10) || 0);
+
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'title is required', candidates: [] });
+    }
+
+    const cacheKey = `${title.toLowerCase()}|${artist.toLowerCase()}|${Math.round(durationSec / 5)}`;
+    const cached = ytMatchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      if (cached.data.length) res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.json({ success: true, candidates: cached.data });
+    }
+
+    const candidates = await matchYoutubeForTrack(title, artist, durationSec);
+
+    if (ytMatchCache.size >= YT_MATCH_CACHE_MAX) {
+      const oldest = ytMatchCache.keys().next().value;
+      if (oldest !== undefined) ytMatchCache.delete(oldest);
+    }
+    // Don't pin a transient failure for a day.
+    ytMatchCache.set(cacheKey, {
+      data: candidates,
+      timestamp: Date.now(),
+      ttl: candidates.length ? YT_MATCH_TTL_MS : YT_MATCH_EMPTY_TTL_MS,
+    });
+
+    if (candidates.length) res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.json({ success: true, candidates });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message, candidates: [] });
   }
 });
 

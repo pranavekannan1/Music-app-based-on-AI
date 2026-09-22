@@ -1,4 +1,5 @@
 import { Track } from '../types';
+import { findYouTubeMatches } from './musicService';
 
 type TimeUpdateCallback = (currentTime: number, duration: number) => void;
 type EndedCallback = () => void;
@@ -15,6 +16,7 @@ declare global {
  * Supports:
  * - Direct lossless/320kbps audio streams via HTMLAudioElement
  * - YouTube IFrame background audio playback for infinite new & old song catalog without proxy blocks
+ * - Preview-only tracks (iTunes / Deezer 30s clips) are matched to a YouTube video and played in full
  * - Generative ambient harmonic synthesizer (Web Audio API) as fallback/soundscapes
  * - Real-time progress synchronization with onTimeUpdate() & seek()
  * - Frequency analysis for visualizers and live EQ
@@ -33,6 +35,13 @@ class AudioEngine {
   private ytReady: boolean = false;
   private ytPollTimer: number | null = null;
   private pendingYtVideoId: string | null = null;
+  // Candidate YouTube videos for the current track (best first) + which one is loaded
+  private ytCandidates: string[] = [];
+  private ytCandidateIdx = 0;
+  // trackId -> matched YouTube video IDs, so replays / resumes don't hit the network again
+  private ytMatchCache = new Map<string, string[]>();
+  // Bumped on every playTrack(); lets async work detect that the user has moved on
+  private playToken = 0;
 
   // Listeners
   private timeListeners: TimeUpdateCallback[] = [];
@@ -99,6 +108,8 @@ class AudioEngine {
               }
             },
             onStateChange: (event: any) => {
+              // Ignore late events from a video we already paused/replaced (they'd flip isPlaying or skip the queue)
+              if (!this.isUsingYouTube) return;
               // YT.PlayerState: -1 unstarted, 0 ENDED, 1 PLAYING, 2 PAUSED, 3 BUFFERING
               if (event.data === 1) {
                 this.isPlaying = true;
@@ -116,8 +127,9 @@ class AudioEngine {
               }
             },
             onError: (err: any) => {
-              console.warn('YouTube Player error, falling back to ambient audio:', err);
-              this.startGenerativeFallback();
+              // 2 bad id, 5 html5 error, 100 removed/private, 101/150 embedding disabled by owner
+              console.warn('YouTube Player error:', err?.data);
+              this.handleYtError();
             },
           },
         });
@@ -227,6 +239,7 @@ class AudioEngine {
     });
 
     this.audioEl.addEventListener('error', (e) => {
+      if (!this.isUsingHtmlAudio) return;
       console.warn('Audio stream playback error, falling back to ambient generative engine:', e);
       this.startGenerativeFallback();
     });
@@ -303,54 +316,166 @@ class AudioEngine {
    * Play a specific Track (handles YouTube, previewUrl, direct stream, or generative synthesis)
    */
   public playTrack(track: Track) {
+    const token = ++this.playToken;
     this.currentTrack = track;
     this.isLiveRadio = !!(track.isLiveRadio || track.duration === 'LIVE' || (track.durationSec === 0 && track.id.startsWith('radio_')));
     this.updateMediaSession(track);
     this.stopGenerativeSynth();
+    this.pendingYtVideoId = null;
 
     const ytId = this.extractYouTubeId(track);
     const streamUrl = track.audioUrl || track.previewUrl;
 
     if (ytId) {
       // 1. Play via YouTube Audio background player
-      this.isUsingHtmlAudio = false;
-      this.isUsingYouTube = true;
-      if (this.audioEl) {
-        this.audioEl.pause();
-        this.audioEl.src = '';
-      }
-      this.playYouTubeVideo(ytId);
+      this.startYouTubeCandidates([ytId]);
+    } else if (this.isPreviewOnly(track, streamUrl)) {
+      // 2. Catalog track that only has a ~30s clip: find the full song on YouTube
+      void this.playFullSongForPreviewTrack(track, streamUrl, token);
     } else if (streamUrl && !streamUrl.includes('resolve-yt-audio')) {
-      // 2. Play direct audio stream (e.g. JioSaavn 320kbps, iTunes, or local audio)
-      this.isUsingYouTube = false;
-      this.stopYtProgressPolling();
-      if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-        this.ytPlayer.pauseVideo();
-      }
-
-      this.isUsingHtmlAudio = true;
-      this.initAudioElement();
-
-      if (this.audioEl) {
-        this.audioEl.src = streamUrl;
-        this.audioEl.currentTime = 0;
-        this.audioEl.volume = this.volume;
-        this.audioEl
-          .play()
-          .then(() => {
-            this.isPlaying = true;
-            if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
-              navigator.mediaSession.playbackState = 'playing';
-            }
-          })
-          .catch((err) => {
-            console.warn('HTML Audio play rejected:', err);
-            this.startGenerativeFallback();
-          });
-      }
+      // 3. Play direct audio stream (e.g. JioSaavn 320kbps or local audio)
+      this.playDirectStream(streamUrl);
     } else {
-      // 3. Ambient generative synthesizer fallback
+      // 4. Ambient generative synthesizer fallback
       this.startGenerativeFallback();
+    }
+  }
+
+  /** iTunes / Deezer only serve ~30s previews; everything else in the catalog is a full stream. */
+  private isPreviewOnly(track: Track, url?: string): boolean {
+    if (track.isLiveRadio || !track.title) return false;
+    if (track.isFullSong === false) return true;
+    return !!url && /(?:dzcdn\.net|mzstatic\.com|itunes\.apple\.com)/i.test(url);
+  }
+
+  private async playFullSongForPreviewTrack(track: Track, previewUrl: string | undefined, token: number) {
+    // Silence whatever was playing while we look the song up
+    this.pauseAllSources();
+    this.isPlaying = true; // user intent: they pressed play
+    this.notifyTimeUpdate(0, track.durationSec || 0);
+
+    let ids = this.ytMatchCache.get(track.id);
+    if (!ids) {
+      ids = await findYouTubeMatches(track);
+      if (token !== this.playToken) return; // user skipped to another track
+      if (ids.length > 0) this.ytMatchCache.set(track.id, ids);
+    }
+    if (token !== this.playToken) return;
+    if (!this.isPlaying) return; // paused during lookup; play() will call playTrack() again (cache is warm)
+
+    if (ids.length > 0) {
+      this.startYouTubeCandidates(ids);
+    } else if (previewUrl) {
+      console.warn('No full-length match found, playing 30s preview:', track.title);
+      this.playDirectStream(previewUrl);
+    } else {
+      this.startGenerativeFallback();
+    }
+  }
+
+  /** Look up (and cache) the YouTube match for a track before it is needed, e.g. the next one in the queue. */
+  public warmYouTubeMatch(track: Track) {
+    const url = track.audioUrl || track.previewUrl;
+    if (!this.isPreviewOnly(track, url) || this.ytMatchCache.has(track.id)) return;
+    findYouTubeMatches(track).then((ids) => {
+      if (ids.length > 0) this.ytMatchCache.set(track.id, ids);
+    });
+  }
+
+  private pauseAllSources() {
+    this.isUsingHtmlAudio = false;
+    this.isUsingYouTube = false;
+    this.stopYtProgressPolling();
+    if (this.audioEl) {
+      this.audioEl.pause();
+    }
+    if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+      try {
+        this.ytPlayer.pauseVideo();
+      } catch {}
+    }
+  }
+
+  private startYouTubeCandidates(ids: string[]) {
+    this.ytCandidates = ids;
+    this.ytCandidateIdx = 0;
+    this.isUsingHtmlAudio = false;
+    this.isUsingYouTube = true;
+    if (this.audioEl) {
+      this.audioEl.pause();
+      this.audioEl.src = '';
+    }
+    this.playYouTubeVideo(ids[0]);
+
+    // If the YouTube IFrame API never loads (ad-blocker, offline), don't hang silently.
+    if (!this.ytReady) {
+      const token = this.playToken;
+      window.setTimeout(() => {
+        if (token === this.playToken && !this.ytReady && this.isUsingYouTube) {
+          this.pendingYtVideoId = null;
+          this.fallbackFromYouTube();
+        }
+      }, 6000);
+    }
+  }
+
+  /** Current YouTube candidate failed (removed / embedding disabled): try the next, else fall back. */
+  private handleYtError() {
+    if (!this.isUsingYouTube) return; // stale error from a video we already moved on from
+    if (this.ytCandidateIdx + 1 < this.ytCandidates.length) {
+      this.ytCandidateIdx += 1;
+      this.playYouTubeVideo(this.ytCandidates[this.ytCandidateIdx]);
+      return;
+    }
+    // Every candidate failed: forget the match so a later play can look it up again.
+    if (this.currentTrack) this.ytMatchCache.delete(this.currentTrack.id);
+    this.fallbackFromYouTube();
+  }
+
+  private fallbackFromYouTube() {
+    this.isUsingYouTube = false;
+    this.stopYtProgressPolling();
+    if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+      try {
+        this.ytPlayer.pauseVideo();
+      } catch {}
+    }
+    const url = this.currentTrack?.previewUrl || this.currentTrack?.audioUrl;
+    if (url && !/youtube\.com|youtu\.be|resolve-yt-audio/.test(url)) {
+      this.playDirectStream(url);
+    } else {
+      this.startGenerativeFallback();
+    }
+  }
+
+  private playDirectStream(streamUrl: string) {
+    this.isUsingYouTube = false;
+    this.stopYtProgressPolling();
+    if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+      try {
+        this.ytPlayer.pauseVideo();
+      } catch {}
+    }
+
+    this.isUsingHtmlAudio = true;
+    this.initAudioElement();
+
+    if (this.audioEl) {
+      this.audioEl.src = streamUrl;
+      this.audioEl.currentTime = 0;
+      this.audioEl.volume = this.volume;
+      this.audioEl
+        .play()
+        .then(() => {
+          this.isPlaying = true;
+          if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'playing';
+          }
+        })
+        .catch((err) => {
+          console.warn('HTML Audio play rejected:', err);
+          this.startGenerativeFallback();
+        });
     }
   }
 

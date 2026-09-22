@@ -698,6 +698,35 @@ export async function getYouTubeVideoDetails(title: string, artist: string): Pro
 }
 
 /**
+ * Find YouTube videos that match a catalog track (ranked best-first, embeddable only).
+ * Used to play full-length audio for tracks whose own source is only a ~30s preview
+ * (iTunes / Deezer). Never throws; returns [] when nothing usable is found.
+ */
+export async function findYouTubeMatches(
+  track: Pick<Track, 'title' | 'artist' | 'durationSec'>
+): Promise<string[]> {
+  try {
+    const qs = new URLSearchParams({
+      title: track.title,
+      artist: track.artist || '',
+      duration: String(Math.round(track.durationSec || 0)),
+    });
+    const res = await apiFetch(`/api/music/yt-match?${qs.toString()}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data?.success || !Array.isArray(data.candidates)) return [];
+    return data.candidates
+      .map((c: { videoId?: string }) => c?.videoId)
+      .filter((id: unknown): id is string => typeof id === 'string' && /^[\w-]{11}$/.test(id));
+  } catch (err) {
+    console.warn('YouTube match lookup failed:', err);
+    return [];
+  }
+}
+
+/**
  * Perform a dynamic search on YouTube to get multiple matching videos
  */
 export async function searchYouTubeVideos(query: string): Promise<any[]> {
