@@ -15,7 +15,7 @@ export const StudioScreen: React.FC<StudioScreenProps> = ({
 }) => {
   const [promptText, setPromptText] = useState(
     initialPrompt ||
-      'Create a 60-minute playlist for studying late at night. Mostly instrumental, calm but not sleepy.'
+      'Apologies aistudio is under development'
   );
   const [acousticWeight, setAcousticWeight] = useState(88);
   const [activeMode, setActiveMode] = useState<'dj' | 'playlist' | 'mood'>('dj');
@@ -135,7 +135,7 @@ export const StudioScreen: React.FC<StudioScreenProps> = ({
           Soundscape Studio
         </h1>
         <p className="text-xs sm:text-sm text-[#cec2d6]">
-          Describe the experience you want to craft your soundscape.
+          On development but system may work but work in progress...
         </p>
       </section>
 
