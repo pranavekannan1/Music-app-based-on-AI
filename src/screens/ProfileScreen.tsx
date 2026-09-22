@@ -191,7 +191,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenStudio }) =>
               Smart Engine
             </span>
             <span className="text-[10px] text-[#cec2d6] uppercase tracking-wider mt-0.5">
-              Taste Tracking
+              Music Tracking
             </span>
           </div>
           <div className="flex flex-col items-center">
