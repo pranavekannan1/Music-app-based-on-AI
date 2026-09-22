@@ -30,7 +30,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
     setInfoMsg(null);
 
     if (!isFirebaseConfigured) {
-      setErrorMsg('Firebase Authentication is not configured. Add the VITE_FIREBASE_* values to your .env file.');
+      setErrorMsg('Authentication is not configured. Add the VITE_FIREBASE_* values to your .env file.');
       return;
     }
 
@@ -120,10 +120,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
             <span className="material-symbols-outlined text-3xl text-white">graphic_eq</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight font-display bg-gradient-to-r from-white via-[#f1f0f7] to-[#dbb8ff] bg-clip-text text-transparent">
-            RezBeatsAI Music
+            RezbeatsAI Music
           </h1>
           <p className="text-xs sm:text-sm text-[#cec2d6]/70">
-            {isLogin ? 'Sign in to access your high-fidelity music realm' : 'Join RezBeatsAI Music for endless high-fidelity soundscapes'}
+            {isLogin ? 'Sign in to access your high-fidelity music realm' : 'Join SonicAI for endless high-fidelity soundscapes'}
           </p>
 
           {/* Firebase Status Badge */}
@@ -131,12 +131,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
             {isFirebaseConfigured ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                Firebase Authentication Connected
+                Authentication Connected
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                 <span className="material-symbols-outlined text-xs">info</span>
-                Firebase Ready (Configure in .env)
+                Authentication Not Configured
               </span>
             )}
           </div>
@@ -273,7 +273,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
                 <span className="material-symbols-outlined text-base">
                   {isLogin ? 'login' : 'how_to_reg'}
                 </span>
-                <span>{isLogin ? 'Sign In to RezBeatsAI Music' : 'Create My Account'}</span>
+                <span>{isLogin ? 'Sign In to SonicAI' : 'Create My Account'}</span>
               </>
             )}
           </button>
