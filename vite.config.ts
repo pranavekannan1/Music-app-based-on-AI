@@ -22,8 +22,8 @@ export default defineConfig(() => {
 
         manifest: {
           id: '/',
-          name: 'SonicAI Music Streamer',
-          short_name: 'SonicAI',
+          name: 'RezBeatsAI Music',
+          short_name: 'RezBeatsAI',
           description:
             'Premium AI-powered music player with continuous background streaming.',
           theme_color: '#0d0e15',

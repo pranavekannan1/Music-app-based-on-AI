@@ -33,9 +33,9 @@ export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
  */
 
 // Local storage keys
-const LIKED_SONGS_KEY = 'sonic_ai_liked_tracks_v5';
-const RECENTLY_PLAYED_KEY = 'sonic_ai_recently_played_v5';
-const USER_PLAYLISTS_KEY = 'sonic_ai_custom_playlists_v5';
+const LIKED_SONGS_KEY = 'rezbeatsai_liked_tracks_v5';
+const RECENTLY_PLAYED_KEY = 'rezbeatsai_recently_played_v5';
+const USER_PLAYLISTS_KEY = 'rezbeatsai_custom_playlists_v5';
 const THEME_KEY = 'sonic_app_theme_v5';
 const AUDIO_QUALITY_KEY = 'sonic_audio_quality_v5';
 const AUTH_USER_KEY = 'sonic_auth_user_v5';
@@ -702,6 +702,22 @@ export async function getYouTubeVideoDetails(title: string, artist: string): Pro
  * Used to play full-length audio for tracks whose own source is only a ~30s preview
  * (iTunes / Deezer). Never throws; returns [] when nothing usable is found.
  */
+/**
+ * Tell the server a track actually started playing. Used only to rank future
+ * search/trending results toward songs this app's users genuinely listen to —
+ * never sent for queued-but-unplayed tracks, and never blocks playback if it fails.
+ */
+export function reportPlay(track: Pick<Track, 'title' | 'artist'>): void {
+  if (!track?.title) return;
+  apiFetch('/api/music/play', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: track.title, artist: track.artist || '' }),
+  }).catch(() => {
+    // Best-effort signal only; playback already succeeded regardless.
+  });
+}
+
 export async function findYouTubeMatches(
   track: Pick<Track, 'title' | 'artist' | 'durationSec'>
 ): Promise<string[]> {

@@ -98,7 +98,7 @@ export function usePWAInstall() {
       return false;
     } catch (error) {
       console.error(
-        'SonicAI PWA installation failed:',
+        'RezBeatsAI Music PWA installation failed:',
         error
       );
 

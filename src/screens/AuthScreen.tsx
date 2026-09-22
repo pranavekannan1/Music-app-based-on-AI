@@ -120,10 +120,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
             <span className="material-symbols-outlined text-3xl text-white">graphic_eq</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight font-display bg-gradient-to-r from-white via-[#f1f0f7] to-[#dbb8ff] bg-clip-text text-transparent">
-            SonicAI Music
+            RezBeatsAI Music
           </h1>
           <p className="text-xs sm:text-sm text-[#cec2d6]/70">
-            {isLogin ? 'Sign in to access your high-fidelity music realm' : 'Join SonicAI for endless high-fidelity soundscapes'}
+            {isLogin ? 'Sign in to access your high-fidelity music realm' : 'Join RezBeatsAI Music for endless high-fidelity soundscapes'}
           </p>
 
           {/* Firebase Status Badge */}
@@ -273,7 +273,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
                 <span className="material-symbols-outlined text-base">
                   {isLogin ? 'login' : 'how_to_reg'}
                 </span>
-                <span>{isLogin ? 'Sign In to SonicAI' : 'Create My Account'}</span>
+                <span>{isLogin ? 'Sign In to RezBeatsAI Music' : 'Create My Account'}</span>
               </>
             )}
           </button>

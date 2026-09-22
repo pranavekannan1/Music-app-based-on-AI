@@ -65,7 +65,7 @@ app.post('/api/ai/music-suggestions', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Prompt is required.' });
     }
 
-    const systemPrompt = `You are SonicAI's music recommendation planner.
+    const systemPrompt = `You are RezBeatsAI Music's recommendation planner.
 Turn the user's natural-language request into 8 useful music search suggestions.
 Do not invent songs. Prefer real artists/songs when you know them.
 Return ONLY valid JSON:
@@ -180,6 +180,7 @@ export interface RoyaltyFreeTrack {
   sourceUrl?: string;
   releaseYear?: string;
   appleMusicUrl?: string;
+  popularity?: number; // 0-100, source-reported worldwide listen/chart popularity, when available
 }
 
 const VERIFIED_ROYALTY_FREE_TRACKS: RoyaltyFreeTrack[] = [
@@ -736,7 +737,7 @@ app.get('/api/music/copyright-guarantee', (req, res) => {
     status: 'guaranteed',
     title: '100% Copyright-Free & Royalty-Free Assurance',
     description:
-      'All audio tracks in SonicAI are licensed under Creative Commons (CC-BY, CC-BY-SA, CC0) or Public Domain. Zero copyright strikes, zero DMCA risk, and zero Content ID claims.',
+      'All audio tracks in RezBeatsAI Music are licensed under Creative Commons (CC-BY, CC-BY-SA, CC0) or Public Domain. Zero copyright strikes, zero DMCA risk, and zero Content ID claims.',
     commercialUseAllowed: true,
     streamingAllowed: true,
     podcastAllowed: true,
@@ -1484,14 +1485,14 @@ Return a JSON array of objects with keys: "title", "artist", "album", "year", "y
             if (videos && videos.length > 0) {
               const bestMatch = videos[0];
               return {
-                id: `yt_grounded_${bestMatch.videoId}`,
+                id: `yt_${bestMatch.videoId}`,
                 title: info.title || cleanVideoTitle(bestMatch.title),
                 artist: info.artist || bestMatch.author || 'Worldwide Artist',
                 album: info.album || 'YouTube Grounded',
                 duration: bestMatch.duration || '03:45',
                 durationSec: parseDurationToSec(bestMatch.duration),
                 coverUrl: `https://img.youtube.com/vi/${bestMatch.videoId}/mqdefault.jpg`,
-                audioUrl: `/api/music/resolve-yt-audio?id=${bestMatch.videoId}`,
+                audioUrl: `https://www.youtube.com/watch?v=${bestMatch.videoId}`,
                 genre: 'Worldwide Pop',
                 language: 'Multilingual',
                 isCopyrightSafe: true,
@@ -1501,23 +1502,9 @@ Return a JSON array of objects with keys: "title", "artist", "album", "year", "y
                 tags: ['google-grounded', 'youtube-matched', 'latest-release'],
               };
             } else {
-              return {
-                id: `ai_procedural_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-                title: info.title,
-                artist: info.artist || 'AI Composition',
-                album: info.album || 'AI Soundtrack',
-                duration: '03:30',
-                durationSec: 210,
-                coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
-                audioUrl: '',
-                genre: 'Cinematic Ambient',
-                language: 'Instrumental',
-                isCopyrightSafe: true,
-                isRoyaltyFree: true,
-                isFullSong: true,
-                country: 'Worldwide',
-                tags: ['ai-synthesized', 'google-grounded-fallback'],
-              };
+              // No real YouTube match found for this AI-guessed title: don't fabricate
+              // a track with no audio behind it, just drop it.
+              return null;
             }
           } catch (err) {
             console.warn(`Failed to resolve video for grounded track: ${info.title}`, err);
@@ -1533,6 +1520,144 @@ Return a JSON array of objects with keys: "title", "artist", "album", "year", "y
     console.error('Error in discoverTracksWithGroq:', err);
   }
   return [];
+}
+
+// ---------------------------------------------------------------------------
+// Usage-based popularity ("the app learns from what people actually play")
+// ---------------------------------------------------------------------------
+// Play counts are aggregated by normalized (title, artist), not by track id,
+// so the same song surfaced via Saavn one time and iTunes another still adds
+// to one shared count. This is a simple, honest heuristic, not a recommender
+// model: it boosts search/trending ranking toward songs this app's own users
+// have actually finished starting, and demotes ones nobody plays. Counts are
+// persisted to a local JSON file so they survive a normal server restart;
+// on hosts with an ephemeral filesystem (e.g. Render's free tier redeploys)
+// they will reset on redeploy unless PLAY_COUNTS_PATH points at a mounted
+// persistent disk.
+import fs from 'fs';
+
+const PLAY_COUNTS_PATH = process.env.PLAY_COUNTS_PATH || path.join(process.cwd(), '.data', 'play-counts.json');
+const playCounts = new Map<string, number>();
+let playCountsDirty = false;
+
+function normalizeTrackKey(title: string, artist: string): string {
+  const norm = (s: string) =>
+    (s || '')
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const firstArtist = (artist || '').split(/,|&|\bfeat\.?\b|\bft\.?\b/i)[0];
+  return `${norm(title)}::${norm(firstArtist)}`;
+}
+
+function loadPlayCounts() {
+  try {
+    if (fs.existsSync(PLAY_COUNTS_PATH)) {
+      const raw = JSON.parse(fs.readFileSync(PLAY_COUNTS_PATH, 'utf-8'));
+      for (const [k, v] of Object.entries(raw)) {
+        if (typeof v === 'number') playCounts.set(k, v);
+      }
+      console.log(`Loaded ${playCounts.size} play-count entries from ${PLAY_COUNTS_PATH}`);
+    }
+  } catch (err) {
+    console.warn('Could not load play counts (starting fresh):', err);
+  }
+}
+loadPlayCounts();
+
+function savePlayCountsIfDirty() {
+  if (!playCountsDirty) return;
+  playCountsDirty = false;
+  try {
+    fs.mkdirSync(path.dirname(PLAY_COUNTS_PATH), { recursive: true });
+    fs.writeFileSync(PLAY_COUNTS_PATH, JSON.stringify(Object.fromEntries(playCounts)));
+  } catch (err) {
+    console.warn('Could not persist play counts:', err);
+  }
+}
+setInterval(savePlayCountsIfDirty, 30 * 1000).unref();
+// Flush on a normal deploy/restart (SIGTERM) so recent plays aren't lost.
+process.on('SIGTERM', () => { savePlayCountsIfDirty(); process.exit(0); });
+process.on('SIGINT', () => { savePlayCountsIfDirty(); process.exit(0); });
+
+function recordPlay(title: string, artist: string) {
+  const key = normalizeTrackKey(title, artist);
+  if (!key.trim() || key === '::') return;
+  playCounts.set(key, (playCounts.get(key) || 0) + 1);
+  playCountsDirty = true;
+}
+
+function getPlayCount(title: string, artist: string): number {
+  return playCounts.get(normalizeTrackKey(title, artist)) || 0;
+}
+
+// Client calls this once playback of a track actually starts (not on mere queueing).
+app.post('/api/music/play', (req, res) => {
+  const { title, artist } = req.body || {};
+  if (typeof title !== 'string' || !title.trim()) {
+    return res.status(400).json({ success: false, message: 'title is required' });
+  }
+  recordPlay(title, String(artist || ''));
+  res.json({ success: true });
+});
+
+// A track is worth showing only if it's plausibly the song the user searched for.
+// This is what keeps AI-guessed and loosely-scraped results from crowding out real
+// matches — anything that doesn't share most of its meaningful words with the query
+// (in the title, artist, or both) is dropped rather than merged in.
+function normTokens(s: string): string[] {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 1);
+}
+
+function isRelevantToQuery(track: { title: string; artist: string }, query: string): boolean {
+  const qTokens = normTokens(query);
+  if (qTokens.length === 0) return true;
+  const hay = new Set(normTokens(`${track.title} ${track.artist}`));
+  const hits = qTokens.filter((t) => hay.has(t)).length;
+  return hits / qTokens.length >= 0.5;
+}
+
+// Ranks search results the way the user actually wants them: real, widely-known
+// songs first. Trusted metadata providers rank above AI-guessed/scraped ones;
+// within that, tracks with more of this app's own plays (real usage) and higher
+// worldwide chart popularity (Deezer's `rank`, when known) float to the top.
+const SOURCE_TRUST: Record<string, number> = {
+  saavn: 40,
+  itunes: 35,
+  deezer: 35,
+  yt: 10,
+  yt_grounded: 5,
+};
+
+function sourceTierOf(id: string): string {
+  if (id.startsWith('saavn_')) return 'saavn';
+  if (id.startsWith('itunes_')) return 'itunes';
+  if (id.startsWith('deezer_')) return 'deezer';
+  if (id.startsWith('yt_grounded_')) return 'yt_grounded';
+  if (id.startsWith('yt_')) return 'yt';
+  return 'other';
+}
+
+function popularityRank(tracks: RoyaltyFreeTrack[]): RoyaltyFreeTrack[] {
+  return [...tracks].sort((a, b) => {
+    const scoreOf = (t: RoyaltyFreeTrack) => {
+      let s = SOURCE_TRUST[sourceTierOf(t.id)] ?? 15;
+      s += Math.min(30, getPlayCount(t.title, t.artist) * 3); // real usage on this app
+      s += (t.popularity || 0) * 0.2; // worldwide chart popularity, when a provider reports it
+      return s;
+    };
+    return scoreOf(b) - scoreOf(a);
+  });
 }
 
 // Search endpoint with wrong spelling tolerance, lyric search, and approximate song retrieval
@@ -1559,19 +1684,11 @@ app.get('/api/music/search', async (req, res) => {
       if (stripped && stripped.length >= 2) {
         searchTerms.push(stripped);
       }
-      searchTerms.push(
-        'Latest Tamil Movie Songs',
-        'Latest Telugu Movie Songs',
-        'Latest Hindi Movie Songs',
-        'Latest Malayalam Movie Songs',
-        'Coolie',
-        'Vettaiyan',
-        'Pushpa 2',
-        'Lokah',
-        'Aavesham',
-        'Devara',
-        'GOAT'
-      );
+      // Note: this used to also inject a fixed, dated list of movie names (Coolie,
+      // Pushpa 2, etc.) into every generic query like "top songs" or "hits" — which
+      // meant unrelated searches kept surfacing the same few unrelated soundtracks.
+      // Genuinely trending/latest content belongs in /api/music/trending and
+      // /api/music/latest, which query it live instead of hardcoding titles.
     }
 
     const collectedPids = new Set<string>();
@@ -1658,44 +1775,44 @@ app.get('/api/music/search', async (req, res) => {
       groundedTracks = groundedTracksRes.value;
     }
 
-    // Merge everything beautifully, putting grounded tracks and exact matches first
+    // Trusted providers (real catalogs, verifiable metadata) always count.
+    const trustedTracks = [...resultTracks, ...itunesTracks, ...deezerTracks].filter((t) =>
+      isRelevantToQuery(t, rawQ),
+    );
+
+    // AI-guessed (Groq) and raw-scraped YouTube results are the least reliable sources —
+    // they're only included as a fallback when the trusted providers came up thin, and
+    // even then only if they're actually relevant to what was searched for.
+    const fallbackTracks =
+      trustedTracks.length < 8
+        ? [...groundedTracks, ...ytTracks].filter((t) => isRelevantToQuery(t, rawQ))
+        : [];
+
     const finalTracksMap = new Map<string, RoyaltyFreeTrack>();
-    
-    groundedTracks.forEach(t => finalTracksMap.set(t.id, t));
-    resultTracks.forEach(t => {
-      if (!finalTracksMap.has(t.id)) finalTracksMap.set(t.id, t);
-    });
-    itunesTracks.forEach(t => {
-      if (!finalTracksMap.has(t.id)) finalTracksMap.set(t.id, t);
-    });
-    deezerTracks.forEach(t => {
-      if (!finalTracksMap.has(t.id)) finalTracksMap.set(t.id, t);
-    });
-    ytTracks.forEach(t => {
+    [...trustedTracks, ...fallbackTracks].forEach((t) => {
       if (!finalTracksMap.has(t.id)) finalTracksMap.set(t.id, t);
     });
 
     let mergedResult = Array.from(finalTracksMap.values());
 
-
-    // Step C: Fuzzy fallback on local verified tracks
-    const localMatches = VERIFIED_ROYALTY_FREE_TRACKS.filter((t) => {
-      return (
-        t.title.toLowerCase().includes(q) ||
-        t.artist.toLowerCase().includes(q) ||
-        t.genre.toLowerCase().includes(q) ||
-        t.tags?.some((tag) => tag.toLowerCase().includes(q))
+    // Step C: Fuzzy fallback on local verified tracks (only if still thin, and only if relevant)
+    if (mergedResult.length < limit) {
+      const localMatches = VERIFIED_ROYALTY_FREE_TRACKS.filter(
+        (t) =>
+          !finalTracksMap.has(t.id) &&
+          (t.title.toLowerCase().includes(q) ||
+            t.artist.toLowerCase().includes(q) ||
+            t.genre.toLowerCase().includes(q) ||
+            t.tags?.some((tag) => tag.toLowerCase().includes(q))),
       );
-    });
-
-    for (const lt of localMatches) {
-      if (!finalTracksMap.has(lt.id)) {
-        mergedResult.push(lt);
-      }
+      mergedResult.push(...localMatches);
     }
 
-    // Cap to limit
-    mergedResult = mergedResult.slice(0, limit);
+    // Rank by trusted-source weight + this app's own play counts + worldwide chart
+    // popularity, then cap. This is what makes results favor songs that are both
+    // authentic matches and actually widely listened to, and lets that ranking
+    // improve over time as more people use the app.
+    mergedResult = popularityRank(mergedResult).slice(0, limit);
 
     responseCache.set(cacheKey, { data: mergedResult, timestamp: Date.now() });
     res.json({ success: true, tracks: mergedResult });
@@ -1725,6 +1842,7 @@ function mapDeezerTrack(t: any): RoyaltyFreeTrack | null {
   const artist = t.artist?.name || 'Unknown Artist';
   const album = t.album?.title || 'Single';
   const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || t.album?.cover;
+  const popularity = Number.isFinite(t.rank) ? Math.max(0, Math.min(100, Math.round(t.rank / 10000))) : undefined;
   return {
     id: `deezer_${t.id}`,
     title: decodeHtml(t.title_short || t.title),
@@ -1743,6 +1861,7 @@ function mapDeezerTrack(t: any): RoyaltyFreeTrack | null {
     isFullSong: false,
     isCopyrightSafe: false,
     isRoyaltyFree: false,
+    popularity,
     tags: ['deezer'],
   };
 }
@@ -1775,7 +1894,7 @@ function mapItunesSong(t: any): RoyaltyFreeTrack | null {
 async function fetchJson(url: string, timeout = 7000): Promise<any | null> {
   try {
     const r = await fetch(url, {
-      headers: { 'User-Agent': 'SonicAI/1.0 (music search app)' },
+      headers: { 'User-Agent': 'RezBeatsAI/1.0 (music search app)' },
       signal: AbortSignal.timeout(timeout),
     });
     if (!r.ok) return null;
@@ -2892,7 +3011,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`SonicAI music server listening on port ${PORT}`);
+    console.log(`RezBeatsAI Music server listening on port ${PORT}`);
   });
 }
 

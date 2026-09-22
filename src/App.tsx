@@ -607,7 +607,7 @@ export default function App() {
 
   /*
    * ------------------------------------------------------------
-   * MAIN SONICAI APPLICATION
+   * MAIN REZBEATSAI MUSIC APPLICATION
    * ------------------------------------------------------------
    */
 

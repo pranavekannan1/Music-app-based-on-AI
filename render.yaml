@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sonicai-music
+    name: rezbeatsai-music
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm start

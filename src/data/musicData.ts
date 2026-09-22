@@ -40,7 +40,7 @@ export const DEFAULT_NOW_PLAYING_TRACK = DEFAULT_TRACK;
 export const INITIAL_USER_PROFILE: UserProfile = {
   name: 'Elena Vance',
   handle: '@elenavance',
-  title: 'SonicAI DNA Explorer • Hi-Fi Spatial',
+  title: 'RezBeatsAI DNA Explorer • Hi-Fi Spatial',
   bio: 'Architect by day, ambient soundscape collector by night. Powered by generative acoustic models.',
   avatarUrl: ELENA_AVATAR_LARGE,
   stats: {

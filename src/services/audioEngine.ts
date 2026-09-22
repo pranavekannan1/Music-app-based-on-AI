@@ -1,5 +1,5 @@
 import { Track } from '../types';
-import { findYouTubeMatches } from './musicService';
+import { findYouTubeMatches, reportPlay } from './musicService';
 
 type TimeUpdateCallback = (currentTime: number, duration: number) => void;
 type EndedCallback = () => void;
@@ -12,7 +12,7 @@ declare global {
 }
 
 /**
- * Universal Audio Engine for SonicAI
+ * Universal Audio Engine for RezBeatsAI Music
  * Supports:
  * - Direct lossless/320kbps audio streams via HTMLAudioElement
  * - YouTube IFrame background audio playback for infinite new & old song catalog without proxy blocks
@@ -42,6 +42,8 @@ class AudioEngine {
   private ytMatchCache = new Map<string, string[]>();
   // Bumped on every playTrack(); lets async work detect that the user has moved on
   private playToken = 0;
+  // Track id we've already sent a play-report for, so retries/resumes/polling don't double-count
+  private playReportedFor: string | null = null;
 
   // Listeners
   private timeListeners: TimeUpdateCallback[] = [];
@@ -114,6 +116,7 @@ class AudioEngine {
               if (event.data === 1) {
                 this.isPlaying = true;
                 this.startYtProgressPolling();
+                this.reportPlayOnce();
               } else if (event.data === 2) {
                 this.isPlaying = false;
                 this.stopYtProgressPolling();
@@ -318,6 +321,7 @@ class AudioEngine {
   public playTrack(track: Track) {
     const token = ++this.playToken;
     this.currentTrack = track;
+    this.playReportedFor = null;
     this.isLiveRadio = !!(track.isLiveRadio || track.duration === 'LIVE' || (track.durationSec === 0 && track.id.startsWith('radio_')));
     this.updateMediaSession(track);
     this.stopGenerativeSynth();
@@ -471,6 +475,7 @@ class AudioEngine {
           if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'playing';
           }
+          this.reportPlayOnce();
         })
         .catch((err) => {
           console.warn('HTML Audio play rejected:', err);
@@ -479,13 +484,20 @@ class AudioEngine {
     }
   }
 
+  private reportPlayOnce() {
+    if (!this.currentTrack || this.isLiveRadio) return;
+    if (this.playReportedFor === this.currentTrack.id) return;
+    this.playReportedFor = this.currentTrack.id;
+    reportPlay(this.currentTrack);
+  }
+
   private updateMediaSession(track: Track) {
     if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: track.title,
           artist: track.artist,
-          album: track.album || 'SonicAI Master',
+          album: track.album || 'RezBeatsAI Master',
           artwork: [
             { src: track.coverUrl, sizes: '96x96', type: 'image/jpeg' },
             { src: track.coverUrl, sizes: '128x128', type: 'image/jpeg' },
