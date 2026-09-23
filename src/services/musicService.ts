@@ -128,329 +128,67 @@ export const INDIAN_TOP_ARTISTS = [
   { name: 'Bansuri Arvind', tag: 'Bamboo Flute Master', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=80', license: 'CC BY-SA 3.0' },
 ];
 
-export const VERIFIED_ROYALTY_FREE_TRACKS: Track[] = [];
-= [
-  {
-    id: 'cc_raga_yaman_sitar',
-    title: 'Raga Yaman (Sitar Recital)',
-    artist: 'Tito Dutta',
-    album: 'Hindustani Classical Heritage',
-    duration: '04:12',
-    durationSec: 252,
-    coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/1/14/Sitar_sample_yaman.ogg',
-    genre: 'Hindustani Classical',
-    language: 'Instrumental',
-    license: 'Creative Commons (CC BY-SA 3.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by-sa/3.0/',
-    attribution: 'Performance by Tito Dutta, Wikimedia Commons',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India',
-    tags: ['sitar', 'yaman', 'evening raga', 'classical', 'meditation'],
-  },
-  {
-    id: 'cc_sitar_tabla_jugalbandi',
-    title: 'Sitar & Tabla Live Jugalbandi',
-    artist: 'Ashok Ayengar & Ensemble',
-    album: 'Freedom Jam Classical Sessions',
-    duration: '05:45',
-    durationSec: 345,
-    coverUrl: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/0/09/Sitar_and_Tabla_rendition_-_Freedom_Jam%2C_August_2015.oga',
-    genre: 'Hindustani Jugalbandi',
-    language: 'Instrumental',
-    license: 'Creative Commons (CC BY-SA 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
-    attribution: 'Sitar: Ashok Ayengar, Tabla accompaniment (Freedom Jam Series)',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India',
-    tags: ['sitar', 'tabla', 'live', 'jam', 'percussion'],
-  },
-  {
-    id: 'cc_eastern_thought',
-    title: 'Eastern Thought (Sitar & Tabla Odyssey)',
-    artist: 'Kevin MacLeod',
-    album: 'World Mystic Expressions',
-    duration: '04:22',
-    durationSec: 262,
-    coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Eastern%20Thought.mp3',
-    genre: 'Indian Fusion',
-    language: 'Instrumental',
-    license: 'Creative Commons Attribution (CC-BY 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Eastern Thought by Kevin MacLeod (incompetech.com) Licensed under CC-BY 4.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India / Worldwide',
-    tags: ['sitar', 'tabla', 'fusion', 'chai time', 'meditation'],
-  },
-  {
-    id: 'cc_raga_bag_bhim',
-    title: 'Raga Bag Bhim (Morning Sitar)',
-    artist: 'Ranjit Makkuni',
-    album: 'Sacred Ragas of Varanasi',
-    duration: '03:55',
-    durationSec: 235,
-    coverUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/a/aa/Raga_Bag_Bhim%2C_Ranjit_Makkuni.ogg',
-    genre: 'Morning Raga',
-    language: 'Instrumental',
-    license: 'Creative Commons (CC BY-SA 3.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by-sa/3.0/',
-    attribution: 'Composed and performed by Ranjit Makkuni',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India',
-    tags: ['sitar', 'morning', 'raga', 'meditation'],
-  },
-  {
-    id: 'cc_temple_of_manes',
-    title: 'Temple of the Manes (Sacred Sanctuary)',
-    artist: 'Kevin MacLeod',
-    album: 'Temple Meditations',
-    duration: '03:48',
-    durationSec: 228,
-    coverUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Temple%20of%20the%20Manes.mp3',
-    genre: 'Temple Meditation',
-    language: 'Instrumental',
-    license: 'Creative Commons Attribution (CC-BY 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Temple of the Manes by Kevin MacLeod (incompetech.com) Licensed under CC-BY 4.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India / Worldwide',
-    tags: ['temple', 'peace', 'meditation', 'mantra', 'bells'],
-  },
-  {
-    id: 'cc_bansuri_ebass',
-    title: 'Bansuri Meditation (E Bass Solo)',
-    artist: 'Traditional Indian Classical',
-    album: 'Sacred Bamboo Flute of Vrindavan',
-    duration: '03:40',
-    durationSec: 220,
-    coverUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Bansuri_sample_E_bass.ogg',
-    genre: 'Bansuri Flute',
-    language: 'Instrumental',
-    license: 'Public Domain (CC0 1.0)',
-    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
-    attribution: 'Dedicated to the Public Domain via Wikimedia Commons',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India',
-    tags: ['bansuri', 'flute', 'krishna', 'meditation', 'peace'],
-  },
-  {
-    id: 'cc_dhaka_rhythm',
-    title: 'Dhaka (Desi Folk Beats & Sitar)',
-    artist: 'Kevin MacLeod',
-    album: 'South Asian Folk Rhythms',
-    duration: '03:30',
-    durationSec: 210,
-    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dhaka.mp3',
-    genre: 'Desi Folk Beats',
-    language: 'Instrumental',
-    license: 'Creative Commons Attribution (CC-BY 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Dhaka by Kevin MacLeod (incompetech.com) Licensed under CC-BY 4.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India / South Asia',
-    tags: ['folk', 'bengali', 'rhythm', 'percussion', 'dance'],
-  },
-  {
-    id: 'cc_desert_city',
-    title: 'Desert City (Rajasthan Caravan)',
-    artist: 'Kevin MacLeod',
-    album: 'Silk Route Chronicles',
-    duration: '03:12',
-    durationSec: 192,
-    coverUrl: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Desert%20City.mp3',
-    genre: 'Desert Folk & Oud',
-    language: 'Instrumental',
-    license: 'Creative Commons Attribution (CC-BY 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Desert City by Kevin MacLeod (incompetech.com) Licensed under CC-BY 4.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India / Rajasthan',
-    tags: ['rajasthan', 'caravan', 'desert', 'oud', 'tabla'],
-  },
-  {
-    id: 'cc_carefree_chai',
-    title: 'Carefree (Chai Time Acoustic Strum)',
-    artist: 'Kevin MacLeod',
-    album: 'Sunny Morning Melodies',
-    duration: '03:25',
-    durationSec: 205,
-    coverUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Carefree.mp3',
-    genre: 'Acoustic Indie',
-    language: 'Instrumental',
-    license: 'Creative Commons Attribution (CC-BY 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Carefree by Kevin MacLeod (incompetech.com) Licensed under CC-BY 4.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'Worldwide',
-    tags: ['chai time', 'acoustic', 'joyful', 'ukulele', 'coffee'],
-  },
-  {
-    id: 'cc_clear_waters',
-    title: 'Clear Waters (Monsoon Morning Dew)',
-    artist: 'Kevin MacLeod',
-    album: 'Pristine Nature Soundscapes',
-    duration: '03:40',
-    durationSec: 220,
-    coverUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clear%20Waters.mp3',
-    genre: 'Nature Acoustic',
-    language: 'Instrumental',
-    license: 'Creative Commons Attribution (CC-BY 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Clear Waters by Kevin MacLeod (incompetech.com) Licensed under CC-BY 4.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'Worldwide',
-    tags: ['monsoon', 'rain', 'waters', 'calm', 'nature'],
-  },
-  {
-    id: 'cc_fluidscape_lofi',
-    title: 'Fluidscape (Midnight Desi Lofi Ambient)',
-    artist: 'Kevin MacLeod',
-    album: 'Deep Night Solitude',
-    duration: '04:15',
-    durationSec: 255,
-    coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fluidscape.mp3',
-    genre: 'Late Night Lofi',
-    language: 'Instrumental',
-    license: 'Creative Commons Attribution (CC-BY 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Fluidscape by Kevin MacLeod (incompetech.com) Licensed under CC-BY 4.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'Worldwide',
-    tags: ['lofi', 'midnight', 'slowed', 'ambient', 'chill'],
-  },
-  {
-    id: 'cc_kiravani_carnatic',
-    title: 'Raga Kiravani (Carnatic Solo)',
-    artist: 'L. Ramakrishnan',
-    album: 'South Indian Carnatic Treasured Kritis',
-    duration: '04:18',
-    durationSec: 258,
-    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/d/d5/Kiravani-L_Ramakrishnan.ogg',
-    genre: 'Carnatic Classical',
-    language: 'Instrumental',
-    license: 'Creative Commons Zero (CC0 Public Domain)',
-    licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
-    attribution: 'Performed by L. Ramakrishnan, dedicated to Public Domain (CC0)',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India',
-    tags: ['carnatic', 'south india', 'kiravani', 'violin'],
-  },
-  {
-    id: 'cc_carnatic_flute',
-    title: 'Carnatic Bamboo Raga',
-    artist: 'Bansuri Arvind',
-    album: 'Temple Winds of Tamil Nadu',
-    duration: '03:15',
-    durationSec: 195,
-    coverUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/0/0f/Carnatic_flute.ogg',
-    genre: 'Carnatic Flute',
-    language: 'Instrumental',
-    license: 'Creative Commons (CC BY-SA 3.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by-sa/3.0/',
-    attribution: 'Performance by Bansuri.arvind, CC BY-SA 3.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'India',
-    tags: ['flute', 'carnatic', 'south india', 'temple'],
-  },
-  {
-    id: 'cc_meditation_impromptu_01',
-    title: 'Meditation Impromptu I (Inner Peace)',
-    artist: 'Kevin MacLeod',
-    album: 'Spiritual Reflections',
-    duration: '03:52',
-    durationSec: 232,
-    coverUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Meditation%20Impromptu%2001.mp3',
-    genre: 'Meditation Acoustic',
-    language: 'Instrumental',
-    license: 'Creative Commons Attribution (CC-BY 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Meditation Impromptu 01 by Kevin MacLeod (incompetech.com) CC BY 4.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'Worldwide',
-    tags: ['meditation', 'inner peace', 'acoustic', 'morning'],
-  },
-  {
-    id: 'cc_gymnopedie',
-    title: 'Gymnopedie No. 1 (Classical Masterpiece)',
-    artist: 'Erik Satie / Kevin MacLeod',
-    album: 'Evergreen Classical Masterpieces',
-    duration: '03:10',
-    durationSec: 190,
-    coverUrl: 'https://images.unsplash.com/photo-1520523839898-50712705e3a8?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Gymnopedie%20No%201.mp3',
-    genre: 'Classical Piano',
-    language: 'Instrumental',
-    license: 'Public Domain / CC-BY Performance',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Erik Satie (Public Domain), Performed by Kevin MacLeod (CC-BY 4.0)',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'Worldwide',
-    tags: ['classical', 'piano', 'relaxing', 'satie'],
-  },
-  {
-    id: 'cc_midsummer_sky',
-    title: 'Midsummer Sky (Warm Indie Breeze)',
-    artist: 'Kevin MacLeod',
-    album: 'Acoustic Horizons',
-    duration: '03:05',
-    durationSec: 185,
-    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
-    audioUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Midsummer%20Sky.mp3',
-    genre: 'Indie Acoustic',
-    language: 'Instrumental',
-    license: 'Creative Commons Attribution (CC-BY 4.0)',
-    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-    attribution: 'Midsummer Sky by Kevin MacLeod (incompetech.com) CC BY 4.0',
-    isCopyrightSafe: true,
-    isRoyaltyFree: true,
-    isFullSong: true,
-    country: 'Worldwide',
-    tags: ['indie', 'sky', 'summer', 'chai', 'guitar'],
-  },
-];
+export const []: Track[] = [];
+
+/**
+ * Direct YouTube Data API v3 Search Client
+ * Uses VITE_YOUTUBE_API_KEY from .env to fetch all real songs available now and in future.
+ */
+export async function searchYouTubeDirect(query: string, maxResults: number = 25): Promise<Track[]> {
+  const apiKey = (import.meta as any).env?.VITE_YOUTUBE_API_KEY;
+  if (!apiKey || !query || !query.trim()) return [];
+
+  try {
+    const musicQuery = /\b(song|track|audio|music)\b/i.test(query) ? query.trim() : `${query.trim()} song`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoEmbeddable=true&maxResults=${maxResults}&q=${encodeURIComponent(musicQuery)}&key=${apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn('Direct YouTube API error status:', res.status);
+      return [];
+    }
+    const data = await res.json();
+    if (!data.items || !Array.isArray(data.items)) return [];
+
+    return data.items
+      .filter((item: any) => item.id?.videoId && item.snippet)
+      .map((item: any) => {
+        const vid = item.id.videoId;
+        const snip = item.snippet;
+        const rawTitle = (snip.title || 'Untitled')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>');
+
+        // Clean up noisy tags like (Official Music Video), (Lyric Video), etc.
+        const cleanTitle = rawTitle
+          .replace(/\s*[\(\[](Official\s*(Music\s*)?Video|Audio|Lyric\s*Video|HD|4K|Visualizer|Full\s*Song|Video)[\)\]]/gi, '')
+          .trim();
+
+        return {
+          id: `youtube_${vid}`,
+          title: cleanTitle || rawTitle,
+          artist: (snip.channelTitle || 'Artist').replace(/ - Topic$/i, '').replace(/VEVO$/i, ''),
+          album: 'Single / YouTube',
+          duration: '03:45',
+          durationSec: 225,
+          coverUrl: snip.thumbnails?.high?.url || snip.thumbnails?.medium?.url || `https://img.youtube.com/vi/${vid}/hqdefault.jpg`,
+          audioUrl: '',
+          genre: 'Latest Music',
+          language: 'Worldwide',
+          isCopyrightSafe: true,
+          isRoyaltyFree: false,
+          isFullSong: true,
+          country: 'Worldwide',
+          tags: ['youtube', 'latest', 'streaming'],
+        };
+      });
+  } catch (err) {
+    console.warn('YouTube search client error:', err);
+    return [];
+  }
+}
 
 export interface UserLocationInfo {
   country: string;
@@ -532,17 +270,10 @@ export async function getCatalogTracks(query = '', page = 1, limit = 20): Promis
   }
 
   const cleanQuery = query.trim().toLowerCase();
-  const matches = cleanQuery
-    ? VERIFIED_ROYALTY_FREE_TRACKS.filter((track) =>
-        [track.title, track.artist, track.album, track.genre, track.language, ...(track.tags || [])]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(cleanQuery),
-      )
-    : VERIFIED_ROYALTY_FREE_TRACKS;
-  const start = Math.max(0, page - 1) * limit;
-  return matches.slice(start, start + limit);
+  if (cleanQuery) {
+    return searchWorldwideCatalog(cleanQuery, limit);
+  }
+  return [];
 }
 
 /**
@@ -596,7 +327,7 @@ export async function getTrendingIndianSongs(language: string = 'all'): Promise<
             genre: 'Pop',
             language: 'Any',
             isCopyrightSafe: true,
-            isRoyaltyFree: true,
+            isRoyaltyFree: false,
             isFullSong: true,
             country: 'Worldwide',
             tags: ['youtube']
@@ -635,30 +366,7 @@ export async function getLatestMovieAlbums(language: string = 'all'): Promise<Mo
     console.warn('Failed to fetch new movie albums:', err);
   }
 
-  // Never show an empty "New Movies" rail — group the local catalog into albums.
-  const localTracks =
-    language === 'all'
-      ? VERIFIED_ROYALTY_FREE_TRACKS
-      : VERIFIED_ROYALTY_FREE_TRACKS.filter(
-          (t) =>
-            t.genre?.toLowerCase().includes(language.toLowerCase()) ||
-            t.tags?.some((tag) => tag.toLowerCase().includes(language.toLowerCase())),
-        );
-  const byAlbum = new Map<string, Track[]>();
-  localTracks.forEach((t) => {
-    const key = t.album || 'Singles';
-    if (!byAlbum.has(key)) byAlbum.set(key, []);
-    byAlbum.get(key)!.push(t);
-  });
-  return Array.from(byAlbum.entries()).map(([title, songs], i) => ({
-    id: `local_album_${i}_${title.toLowerCase().replace(/\s+/g, '_')}`,
-    title,
-    image: songs[0]?.coverUrl || '',
-    artist: songs[0]?.artist || 'Various Artists',
-    year: '2026',
-    songCount: songs.length,
-    songs,
-  })) as MovieSearchResult[];
+  return [];
 }
 
 /**
@@ -788,11 +496,22 @@ export async function triggerAiMusicRefresh(language: string = 'all'): Promise<b
  */
 export async function searchWorldwideCatalog(query: string, limit: number = 25): Promise<Track[]> {
   if (!query || !query.trim()) {
-    return VERIFIED_ROYALTY_FREE_TRACKS.slice(0, limit);
+    return [];
   }
 
-  const cleanQ = query.trim().toLowerCase();
+  const cleanQ = query.trim();
 
+  // 1. First attempt: Direct YouTube Data API v3 using user's API key
+  try {
+    const directResults = await searchYouTubeDirect(cleanQ, limit);
+    if (directResults.length > 0) {
+      return directResults;
+    }
+  } catch (e) {
+    console.warn('Direct YouTube search attempt failed, trying backend:', e);
+  }
+
+  // 2. Second attempt: App backend /api/music/youtube-search
   try {
     const res = await apiFetch(`/api/music/youtube-search?q=${encodeURIComponent(cleanQ)}`);
     if (res.ok) {
@@ -802,18 +521,10 @@ export async function searchWorldwideCatalog(query: string, limit: number = 25):
       }
     }
   } catch (err) {
-    console.warn('Using client search fallback for royalty-free tracks:', err);
+    console.warn('Backend search error:', err);
   }
 
-// Client-side search across verified royalty-free catalog
-  return [].filter(
-    (t) =>
-      t.title.toLowerCase().includes(cleanQ) ||
-      t.artist.toLowerCase().includes(cleanQ) ||
-      t.album?.toLowerCase().includes(cleanQ) ||
-      t.genre?.toLowerCase().includes(cleanQ) ||
-      t.tags?.some((tag) => tag.toLowerCase().includes(cleanQ))
-  );
+  return [];
 }
 
 /**
@@ -850,67 +561,33 @@ export async function searchWorldwideGrouped(query: string): Promise<GroupedSear
     console.warn('Grouped search fallback to client:', err);
   }
 
-  // Client fallback
-  const localMatches = VERIFIED_ROYALTY_FREE_TRACKS.filter(
-    (t) =>
-      t.title.toLowerCase().includes(cleanQ) ||
-      t.artist.toLowerCase().includes(cleanQ) ||
-      t.album?.toLowerCase().includes(cleanQ) ||
-      t.genre?.toLowerCase().includes(cleanQ) ||
-      t.tags?.some((tag) => tag.toLowerCase().includes(cleanQ))
-  );
-
-  const albumMap = new Map<string, Track[]>();
-  localMatches.forEach((t) => {
-    if (t.album && t.album !== 'Single') {
-      const list = albumMap.get(t.album) || [];
-      list.push(t);
-      albumMap.set(t.album, list);
-    }
-  });
-
-  const movies: MovieSearchResult[] = Array.from(albumMap.entries()).map(([album, songs]) => ({
-    id: `movie_${album}`,
-    title: album,
-    image: songs[0]?.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
-    artist: songs[0]?.artist,
-    year: '2026',
-    songCount: songs.length,
-    songs,
-  }));
-
-  const artistMap = new Map<string, Track[]>();
-  localMatches.forEach((t) => {
-    if (t.artist) {
-      const list = artistMap.get(t.artist) || [];
-      list.push(t);
-      artistMap.set(t.artist, list);
-    }
-  });
-
-  const artists: ArtistSearchResult[] = Array.from(artistMap.entries()).map(([artist, songs]) => ({
-    id: `artist_${artist}`,
-    name: artist,
-    image: songs[0]?.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
-    role: 'Featured Artist',
-    songs,
-  }));
-
-  return {
-    query,
-    songs: localMatches,
-    movies,
-    artists,
-    playlists: [
-      {
-        id: `pl_${cleanQ}`,
-        title: `Curated "${query}" Collection`,
-        image: localMatches[0]?.coverUrl || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
-        trackCount: localMatches.length,
-        songs: localMatches,
-      },
-    ],
-  };
+  // Client fallback using direct YouTube search
+  try {
+    const directSongs = await searchYouTubeDirect(cleanQ, 20);
+    return {
+      query,
+      songs: directSongs,
+      movies: [],
+      artists: [],
+      playlists: directSongs.length > 0 ? [
+        {
+          id: `pl_${cleanQ}`,
+          title: `Curated "${query}" Collection`,
+          image: directSongs[0]?.coverUrl || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
+          trackCount: directSongs.length,
+          songs: directSongs,
+        },
+      ] : [],
+    };
+  } catch {
+    return {
+      query,
+      songs: [],
+      movies: [],
+      artists: [],
+      playlists: [],
+    };
+  }
 }
 
 /**
@@ -1051,7 +728,7 @@ export function convertRadioToTrack(station: RadioStation): Track {
     isLiveRadio: true,
     isLossless: false,
     isCopyrightSafe: true,
-    isRoyaltyFree: true,
+    isRoyaltyFree: false,
     license: 'Public Service / Community Open Broadcast',
     licenseUrl: 'https://prasarbharati.gov.in',
     attribution: `${station.name} - Open Cultural Transmission`,
@@ -1427,47 +1104,9 @@ export function getEndlessQueueTracks(currentQueue: Track[], count = 6): Track[]
   const recentlyPlayed = getRecentlyPlayed();
   const liked = getLikedTracks();
 
-  // Extract favorite genres & tags from recently played & liked
-  const favoriteTags = new Set<string>();
-  [...recentlyPlayed, ...liked].forEach((t) => {
-    if (t.genre) favoriteTags.add(t.genre.toLowerCase());
-    if (t.tags && Array.isArray(t.tags)) {
-      t.tags.forEach((tag: string) => favoriteTags.add(tag.toLowerCase()));
-    }
-  });
-
   // Filter available tracks not already in the active queue
-  const available = VERIFIED_ROYALTY_FREE_TRACKS.filter((t) => !existingIds.has(t.id));
-
-  // Score candidate tracks based on listening taste alignment
-  const scored = available.map((track) => {
-    let score = Math.random() * 0.5; // slight serendipity
-    const trackGenre = (track.genre || '').toLowerCase();
-    if (favoriteTags.has(trackGenre)) score += 2;
-    if (track.tags && Array.isArray(track.tags)) {
-      track.tags.forEach((tag: string) => {
-        if (favoriteTags.has(tag.toLowerCase())) score += 1;
-      });
-    }
-    return { track, score };
-  });
-
-  scored.sort((a, b) => b.score - a.score);
-  const prioritized = scored.map((s) => s.track);
-
-  if (prioritized.length >= count) {
-    return prioritized.slice(0, count);
-  }
-
-  // If exhausted, generate seamless sequence variations so playback never stops
-  const shuffled = [...VERIFIED_ROYALTY_FREE_TRACKS].sort(() => Math.random() - 0.5);
-  const remainder = count - prioritized.length;
-  const loopTracks = shuffled.slice(0, Math.max(remainder, count)).map((t, idx) => ({
-    ...t,
-    id: `${t.id}_seq_${Date.now()}_${idx}`,
-  }));
-
-  return [...prioritized, ...loopTracks].slice(0, count);
+  const available = [...recentlyPlayed, ...liked].filter((t) => !existingIds.has(t.id));
+  return available.slice(0, count);
 }
 
 // ==========================================

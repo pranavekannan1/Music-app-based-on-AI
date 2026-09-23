@@ -79,7 +79,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg sm:text-xl font-bold text-[#e3e2e8] font-display">
-                {mode === 'login' ? 'Welcome to Sonic' : 'Create Sonic Account'}
+                {mode === 'login' ? 'Welcome to RezbeatsAi' : 'Create RezbeatsAi Account'}
               </h2>
               <p className="text-xs text-[#cec2d6]/80">
                 High-Fidelity • 320kbps Master Audio

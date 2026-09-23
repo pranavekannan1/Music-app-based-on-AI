@@ -11,7 +11,9 @@ import {
   SearchSuggestionItem,
   detectUserLocation,
   apiFetch,
+  getAuthUser,
 } from '../services/musicService';
+import { saveAccountSearchHistory, loadAccountSearchHistory } from '../services/firebase';
 
 interface DiscoverScreenProps {
   onPlayTrack: (track: Track, queue?: Track[]) => void;
@@ -47,10 +49,31 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
       const updated = [trimmed, ...prev.filter(item => item.toLowerCase() !== trimmed.toLowerCase())].slice(0, 5);
       try {
         localStorage.setItem('rezbeatsai_search_history', JSON.stringify(updated));
+        const authUser = getAuthUser();
+        if (authUser && authUser.id && authUser.id !== 'guest') {
+          saveAccountSearchHistory(authUser.id, updated);
+        }
       } catch {}
       return updated;
     });
   };
+
+  useEffect(() => {
+    try {
+      const authUser = getAuthUser();
+      if (authUser && authUser.id && authUser.id !== 'guest') {
+        loadAccountSearchHistory(authUser.id).then((cloudHistory) => {
+          if (cloudHistory && cloudHistory.length > 0) {
+            const capped = cloudHistory.slice(0, 5);
+            setRecentSearches(capped);
+            try {
+              localStorage.setItem('rezbeatsai_search_history', JSON.stringify(capped));
+            } catch {}
+          }
+        });
+      }
+    } catch {}
+  }, []);
 
   const [activeCategoryTab, setActiveCategoryTab] = useState<SearchCategoryTab>('all');
   const [expandedMovieId, setExpandedMovieId] = useState<string | null>(null);

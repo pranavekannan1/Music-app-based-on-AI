@@ -16,14 +16,15 @@ export default defineConfig(() => {
         includeAssets: [
           'favicon.ico',
           'apple-touch-icon.png',
+          'rezbeatsai-icon.jpg',
           'pwa-192x192.png',
           'pwa-512x512.png',
         ],
 
         manifest: {
           id: '/',
-          name: 'RezBeatsAI Music',
-          short_name: 'RezBeatsAI',
+          name: 'RezbeatsAi',
+          short_name: 'RezbeatsAi',
           description:
             'Premium AI-powered music player with continuous background streaming.',
           theme_color: '#0d0e15',

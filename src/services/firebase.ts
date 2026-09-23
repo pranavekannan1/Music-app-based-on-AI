@@ -223,4 +223,38 @@ function persistLocalAuth(profile: UserAuthProfile) {
     window.dispatchEvent(new CustomEvent('rezbeatsai_auth_change', { detail: profile }));
   } catch {}
 }
-export { app };
+
+/**
+ * Save user's search history to their cloud account (Cap: 5 items)
+ */
+export async function saveAccountSearchHistory(userId: string, searches: string[]): Promise<void> {
+  const capped = searches.slice(0, 5);
+  if (!isFirebaseConfigured || !app || !userId || userId === 'guest') return;
+  try {
+    const { getFirestore, doc, setDoc } = await import('firebase/firestore');
+    const db = getFirestore(app);
+    await setDoc(doc(db, 'users', userId), { searchHistory: capped, lastUpdated: Date.now() }, { merge: true });
+  } catch (err) {
+    console.warn('Could not sync search history to cloud account:', err);
+  }
+}
+
+/**
+ * Load user's search history from their cloud account (Cap: 5 items)
+ */
+export async function loadAccountSearchHistory(userId: string): Promise<string[] | null> {
+  if (!isFirebaseConfigured || !app || !userId || userId === 'guest') return null;
+  try {
+    const { getFirestore, doc, getDoc } = await import('firebase/firestore');
+    const db = getFirestore(app);
+    const snap = await getDoc(doc(db, 'users', userId));
+    if (snap.exists() && Array.isArray(snap.data()?.searchHistory)) {
+      return snap.data().searchHistory.slice(0, 5);
+    }
+  } catch (err) {
+    console.warn('Could not load search history from cloud account:', err);
+  }
+  return null;
+}
+
+export { app };

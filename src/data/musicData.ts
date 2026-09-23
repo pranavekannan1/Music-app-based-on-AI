@@ -1,7 +1,6 @@
 import { Track, SmartPlaylist, UserProfile } from '../types';
 
-export const REZBEATSAI_LOGO_URL =
-  'https://lh3.googleusercontent.com/aida/AEtjO1WvbJXVTSgVkSn_a5d3mOb0ZXERLTbI8jUgCi9xIiSKQWNUQs2Kqe9NX9jrwMA6Tho_slhXXcuG3CBAjXq5yhfdXX6xamHPeJv1qZZA9pLTWm0D4bwZ2DmrQCK4sEj76ALoKt2biU9sagxaaSGRieM74yPanqSBk7N3hdxo5WeT8DC-QlYoDc7JcIdc2nqNGNVrY-CX7JAGUa2B9we40FOTBkuKCK9bXbNxLbGVamT8LWgK80MuA_sq5ipH';
+export const REZBEATSAI_LOGO_URL = '/rezbeatsai-icon.jpg';
 
 export const ELENA_AVATAR_LARGE =
   'https://lh3.googleusercontent.com/aida/AEtjO1VPxD_LWEbpw2F-6mm3SMdJH44f0Jp1MeVJQK4oeT2LYpZvnftWXfpoVXFHJXqXWyJV50mOYhpfghky07A8XPpcMb1SLcQWqzCabqhBBZYnS5mh-4JJ4rH5AEIgq5Uctm60ZLwYwLvdOuQltTEPzX2P94uynJfWU8l8rHxA99fWa25G-1MyR4QzIEDYGImx9oyMOxftr8uTWHjLtD0cC4e2uc1KRgd8QJbqLqpNkL8o5ksv-7xSLRsvZ6Fx';
@@ -10,29 +9,25 @@ export const ELENA_AVATAR_SMALL =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuBKrBN_LnXSfopwbdmHtLYDuH2eFw5lFqht3wTlagUPATX8mWcxwWqBeWOomFV6BltgZbc8XUg652_zucgH9eD5NQTG7bOyYqzi6R55Y7w9XuBaciCnZ2hu5ocUURQKA_Hs3UgWiqBTs_e8-H7Wu0V0abS8ALXm_sxvCDKNJMmAPJfWKW7zsUdG1xq70K10Xe31ahqkMPfRVB2i634rvvUqI8q6FVGmTS7F3yr8hjrV7h9yTg5x-7aoHg';
 
 export const DEFAULT_TRACK: Track = {
-  id: 'cc_raga_yaman_sitar',
-  title: 'Raga Yaman (Sitar Recital)',
-  artist: 'Tito Dutta',
-  album: 'Hindustani Classical Heritage',
-  duration: '04:12',
-  durationSec: 252,
+  id: 'youtube_jfKfPfyJRdk', // Lofi hip hop radio / chill beats
+  title: 'Chilled Beats & Melodies',
+  artist: 'Lofi Girl',
+  album: 'RezbeatsAi Stream',
+  duration: '03:45',
+  durationSec: 225,
   coverUrl:
     'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-  previewUrl: 'https://upload.wikimedia.org/wikipedia/commons/1/14/Sitar_sample_yaman.ogg',
-  audioUrl: 'https://upload.wikimedia.org/wikipedia/commons/1/14/Sitar_sample_yaman.ogg',
-  genre: 'Hindustani Classical',
-  country: 'India',
+  audioUrl: '',
+  genre: 'Chill / Lo-Fi',
+  country: 'Worldwide',
   language: 'Instrumental',
-  license: 'Creative Commons (CC BY-SA 3.0)',
-  licenseUrl: 'https://creativecommons.org/licenses/by-sa/3.0/',
-  attribution: 'Performance by Tito Dutta, Wikimedia Commons',
   isCopyrightSafe: true,
-  isRoyaltyFree: true,
+  isRoyaltyFree: false,
   isLossless: true,
   isFullSong: true,
-  tags: ['Sitar', 'Raga Yaman', 'Indian Classical', 'Evening Raga'],
-  bpm: 72,
-  affinityNote: 'Hindustani Classical Master • Evening Raga Yaman',
+  tags: ['lofi', 'chill', 'study', 'focus'],
+  bpm: 80,
+  affinityNote: 'High-Fidelity Audio Stream',
 };
 
 export const DEFAULT_NOW_PLAYING_TRACK = DEFAULT_TRACK;

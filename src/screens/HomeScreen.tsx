@@ -20,7 +20,9 @@ import {
   getUserTasteProfile,
   recordTrackPlay,
   triggerAiMusicRefresh,
+  getAuthUser,
 } from '../services/musicService';
+import { saveAccountSearchHistory, loadAccountSearchHistory } from '../services/firebase';
 
 interface HomeScreenProps {
   onPlayTrack: (track: Track, queue?: Track[]) => void;
@@ -74,6 +76,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const updated = [trimmed, ...prev.filter(item => item.toLowerCase() !== trimmed.toLowerCase())].slice(0, 5);
       try {
         localStorage.setItem('rezbeatsai_search_history', JSON.stringify(updated));
+        const authUser = getAuthUser();
+        if (authUser && authUser.id && authUser.id !== 'guest') {
+          saveAccountSearchHistory(authUser.id, updated);
+        }
       } catch {}
       return updated;
     });
@@ -102,6 +108,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
 
     refreshUserData();
+
+    // Sync cloud search history from user account (kept in account, max 5)
+    try {
+      const authUser = getAuthUser();
+      if (authUser && authUser.id && authUser.id !== 'guest') {
+        loadAccountSearchHistory(authUser.id).then((cloudHistory) => {
+          if (cloudHistory && cloudHistory.length > 0) {
+            const capped = cloudHistory.slice(0, 5);
+            setRecentSearches(capped);
+            try {
+              localStorage.setItem('rezbeatsai_search_history', JSON.stringify(capped));
+            } catch {}
+          }
+        });
+      }
+    } catch {}
 
     // Auto-detect user location for region-based song loading
     detectUserLocation().then((loc) => {
@@ -589,6 +611,71 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           )}
         </section>
       )}
+
+      {/* ========================================================= */}
+      {/* 🚀 SPOTIFY QUICK ACCESS TILES (Good Morning / Jump Back In) */}
+      {/* ========================================================= */}
+      {(() => {
+        const pool = [
+          ...recentlyPlayedTracks,
+          ...onRepeatList.map((r) => r.track),
+          ...activeTracks,
+        ].filter((v, i, a) => a.findIndex((t) => t.id === v.id) === i);
+        const tiles = pool.slice(0, 6);
+        if (tiles.length === 0) return null;
+
+        return (
+          <section className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3">
+            {tiles.map((track) => {
+              const isCurrent = currentTrackId === track.id;
+              const isPlayingThis = isCurrent && isPlaying;
+              return (
+                <div
+                  key={`spotify_tile_${track.id}`}
+                  onClick={() => handlePlayTrackAndTrackStats(track, tiles)}
+                  className={`group relative flex items-center rounded-lg overflow-hidden cursor-pointer transition-all duration-200 border ${
+                    isCurrent
+                      ? 'bg-[#7928ca]/30 border-[#dbb8ff]/60 shadow-[0_4px_16px_rgba(121,40,202,0.3)]'
+                      : 'bg-[#1e1f26]/80 hover:bg-[#282933] border-white/[0.05] shadow-sm'
+                  }`}
+                >
+                  <div className="relative w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0 bg-[#2b2c36]">
+                    <img
+                      src={track.coverUrl}
+                      alt={track.title}
+                      className="w-full h-full object-cover shadow-[2px_0_8px_rgba(0,0,0,0.4)]"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop&q=80';
+                      }}
+                    />
+                    {isPlayingThis && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-[#1db954] text-base animate-pulse">
+                          graphic_eq
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 px-3 py-1">
+                    <h4 className="text-xs sm:text-sm font-bold text-[#e3e2e8] truncate group-hover:text-white transition-colors">
+                      {track.title}
+                    </h4>
+                    <p className="text-[10px] text-[#cec2d6]/70 truncate mt-0.5">{track.artist}</p>
+                  </div>
+                  <div className="pr-3 opacity-0 group-hover:opacity-100 transition-all transform translate-x-1 group-hover:translate-x-0 flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-[#1db954] text-[#003b14] flex items-center justify-center shadow-md hover:scale-105 transition-transform">
+                      <span className="material-symbols-outlined text-base">
+                        {isPlayingThis ? 'pause' : 'play_arrow'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </section>
+        );
+      })()}
 
       {/* ========================================================= */}
       {/* 🔁 ON REPEAT (Your Heavy Rotation) */}
