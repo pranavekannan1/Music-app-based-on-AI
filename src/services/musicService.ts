@@ -128,7 +128,7 @@ export const INDIAN_TOP_ARTISTS = [
   { name: 'Bansuri Arvind', tag: 'Bamboo Flute Master', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=80', license: 'CC BY-SA 3.0' },
 ];
 
-export const []: Track[] = [];
+// Royalty-free tracks removed — all music now served via YouTube Data API
 
 /**
  * Direct YouTube Data API v3 Search Client
@@ -791,17 +791,7 @@ export function addToRecentlyPlayed(track: Track): void {
     const newHistory = filtered.slice(0, 40);
     localStorage.setItem(RECENTLY_PLAYED_KEY, JSON.stringify(newHistory));
 
-    // Sync to Firestore in background
-    const userJson = localStorage.getItem('rezbeatsai_auth_user');
-    if (userJson) {
-      const user = JSON.parse(userJson);
-      if (user && user.id) {
-        try {
-          const db = require('firebase/firestore').getFirestore(require('./firebase').app);
-          require('firebase/firestore').setDoc(require('firebase/firestore').doc(db, 'users', user.id), { history: newHistory }, { merge: true });
-        } catch (e) { console.warn('Firestore sync failed', e); }
-      }
-    }
+    // Firestore sync handled separately via firebase.ts saveAccountSearchHistory
   } catch {
     // Ignore
   }
@@ -1258,6 +1248,77 @@ export function recordTrackPlay(track: Track): void {
   }
 }
 
+export const DEFAULT_HEAVY_ROTATION_TRACKS: Track[] = [
+  {
+    id: 'youtube_4NRXx6U8ABQ',
+    title: 'Blinding Lights',
+    artist: 'The Weeknd',
+    album: 'After Hours',
+    duration: '03:20',
+    durationSec: 200,
+    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+    audioUrl: '',
+    genre: 'Synthpop',
+    language: 'English',
+    isCopyrightSafe: true,
+    isRoyaltyFree: false,
+    isFullSong: true,
+    country: 'Worldwide',
+    tags: ['pop', 'trending', 'heavy rotation'],
+  },
+  {
+    id: 'youtube_fJ9rUzIMcZQ',
+    title: 'Bohemian Rhapsody',
+    artist: 'Queen',
+    album: 'A Night at the Opera',
+    duration: '05:55',
+    durationSec: 355,
+    coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+    audioUrl: '',
+    genre: 'Rock',
+    language: 'English',
+    isCopyrightSafe: true,
+    isRoyaltyFree: false,
+    isFullSong: true,
+    country: 'Worldwide',
+    tags: ['rock', 'legendary', 'classic'],
+  },
+  {
+    id: 'youtube_BddP6PYo2gs',
+    title: 'Kesariya',
+    artist: 'Arijit Singh, Pritam',
+    album: 'Brahmastra',
+    duration: '04:28',
+    durationSec: 268,
+    coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
+    audioUrl: '',
+    genre: 'Bollywood Romantic',
+    language: 'Hindi',
+    isCopyrightSafe: true,
+    isRoyaltyFree: false,
+    isFullSong: true,
+    country: 'India',
+    tags: ['arijit', 'kesariya', 'romantic'],
+  },
+  {
+    id: 'youtube_H5v3kku4y6Q',
+    title: 'As It Was',
+    artist: 'Harry Styles',
+    album: "Harry's House",
+    duration: '02:47',
+    durationSec: 167,
+    coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80',
+    audioUrl: '',
+    genre: 'Indie Pop',
+    language: 'English',
+    isCopyrightSafe: true,
+    isRoyaltyFree: false,
+    isFullSong: true,
+    country: 'Worldwide',
+    tags: ['indie', 'pop', 'trending'],
+  },
+];
+
 /**
  * Returns user's repeated songs (tracks played multiple times / on heavy rotation)
  */
@@ -1265,35 +1326,44 @@ export function getOnRepeatTracks(): { track: Track; playCount: number }[] {
   try {
     const raw = localStorage.getItem(TRACK_PLAY_COUNTS_KEY);
     if (!raw) {
-      // Seed friendly initial repeated songs if fresh
-      return [
-        { track: ({} as Track), playCount: 8 },
-        { track: ({} as Track), playCount: 5 },
-        { track: ({} as Track), playCount: 4 },
-        { track: ({} as Track), playCount: 3 },
-      ];
+      return DEFAULT_HEAVY_ROTATION_TRACKS.map((track, i) => ({
+        track,
+        playCount: 12 - i * 2,
+      }));
     }
     const map: Record<string, TrackPlayStats> = JSON.parse(raw);
     const list = Object.values(map)
-      .filter((item) => item.playCount >= 1)
+      .filter((item) => item?.track && item.track.title && item.track.id && item.playCount >= 1)
       .sort((a, b) => b.playCount - a.playCount);
 
     if (list.length === 0) {
-      return [
-        { track: ({} as Track), playCount: 6 },
-        { track: ({} as Track), playCount: 4 },
-      ];
+      return DEFAULT_HEAVY_ROTATION_TRACKS.map((track, i) => ({
+        track,
+        playCount: 12 - i * 2,
+      }));
     }
 
-    return list.map((item) => ({
+    const result = list.map((item) => ({
       track: item.track,
       playCount: item.playCount,
     }));
+
+    if (result.length < 4) {
+      const seenIds = new Set(result.map((r) => r.track.id));
+      for (const defTrack of DEFAULT_HEAVY_ROTATION_TRACKS) {
+        if (!seenIds.has(defTrack.id)) {
+          result.push({ track: defTrack, playCount: 4 });
+          if (result.length >= 4) break;
+        }
+      }
+    }
+
+    return result;
   } catch {
-    return [
-      { track: ({} as Track), playCount: 6 },
-      { track: ({} as Track), playCount: 4 },
-    ];
+    return DEFAULT_HEAVY_ROTATION_TRACKS.map((track, i) => ({
+      track,
+      playCount: 10 - i * 2,
+    }));
   }
 }
 

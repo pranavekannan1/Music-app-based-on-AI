@@ -720,11 +720,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       src={track.coverUrl}
                       alt={track.title}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80';
+                      }}
                     />
 
-                    <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity">
+                    {isPlayingThis && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <div className="flex items-end gap-0.5 h-5">
+                          <span className="w-1 bg-[#dbb8ff] h-full animate-pulse rounded-sm"></span>
+                          <span className="w-1 bg-[#1db954] h-3/5 animate-pulse delay-75 rounded-sm"></span>
+                          <span className="w-1 bg-[#ff9933] h-4/5 animate-pulse delay-150 rounded-sm"></span>
+                          <span className="w-1 bg-[#dbb8ff] h-2/5 animate-pulse delay-100 rounded-sm"></span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${isPlayingThis ? 'opacity-0' : 'opacity-0 hover:opacity-100'}`}>
                       <span className="material-symbols-outlined text-white text-2xl">
-                        {isPlayingThis ? 'pause_circle' : 'play_circle'}
+                        play_circle
                       </span>
                     </div>
                   </div>
