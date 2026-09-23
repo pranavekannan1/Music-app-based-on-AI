@@ -596,8 +596,24 @@ export async function getTrendingIndianSongs(language: string = 'all'): Promise<
     const res = await apiFetch(`/api/music/trending?language=${encodeURIComponent(language)}`);
     if (res.ok) {
       const data = await res.json();
-      if (data.success && data.tracks && data.tracks.length > 0) {
-        return data.tracks;
+      if (data.success && data.videos && data.videos.length > 0) {
+        return data.videos.map(v => ({
+            id: v.videoId || v.id,
+            title: v.title,
+            artist: v.author || v.artist || 'Unknown',
+            album: 'Single',
+            duration: v.duration || '03:30',
+            durationSec: 210,
+            coverUrl: v.thumbnail || v.coverUrl || '',
+            audioUrl: `/api/music/resolve-yt-audio?id=${v.videoId || v.id}`,
+            genre: 'Pop',
+            language: 'Any',
+            isCopyrightSafe: true,
+            isRoyaltyFree: true,
+            isFullSong: true,
+            country: 'Worldwide',
+            tags: ['youtube']
+        }));
       }
     }
   } catch (err) {
@@ -791,7 +807,7 @@ export async function searchWorldwideCatalog(query: string, limit: number = 25):
   const cleanQ = query.trim().toLowerCase();
 
   try {
-    const res = await apiFetch(`/api/music/search?q=${encodeURIComponent(cleanQ)}&limit=${limit}`);
+    const res = await apiFetch(`/api/music/youtube-search?q=${encodeURIComponent(cleanQ)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.tracks && data.tracks.length > 0) {
@@ -1108,7 +1124,20 @@ export function addToRecentlyPlayed(track: Track): void {
     const current = getRecentlyPlayed();
     const filtered = current.filter((t) => t.id !== track.id && t.title !== track.title);
     filtered.unshift(track);
-    localStorage.setItem(RECENTLY_PLAYED_KEY, JSON.stringify(filtered.slice(0, 40)));
+    const newHistory = filtered.slice(0, 40);
+    localStorage.setItem(RECENTLY_PLAYED_KEY, JSON.stringify(newHistory));
+
+    // Sync to Firestore in background
+    const userJson = localStorage.getItem('sonic_auth_user');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user && user.id) {
+        try {
+          const db = require('firebase/firestore').getFirestore(require('./firebase').app);
+          require('firebase/firestore').setDoc(require('firebase/firestore').doc(db, 'users', user.id), { history: newHistory }, { merge: true });
+        } catch (e) { console.warn('Firestore sync failed', e); }
+      }
+    }
   } catch {
     // Ignore
   }

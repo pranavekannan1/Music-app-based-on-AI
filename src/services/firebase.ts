@@ -223,3 +223,4 @@ function persistLocalAuth(profile: UserAuthProfile) {
     window.dispatchEvent(new CustomEvent('sonic_auth_change', { detail: profile }));
   } catch {}
 }
+export { app };
