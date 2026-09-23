@@ -55,14 +55,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenStudio }) =>
       if (e.detail) setQuality(e.detail);
     };
 
-    window.addEventListener('sonic_auth_change', handleAuthChange);
-    window.addEventListener('sonic_theme_change', handleThemeChange);
-    window.addEventListener('sonic_quality_change', handleQualityChange);
+    window.addEventListener('rezbeatsai_auth_change', handleAuthChange);
+    window.addEventListener('rezbeatsai_theme_change', handleThemeChange);
+    window.addEventListener('rezbeatsai_quality_change', handleQualityChange);
 
     return () => {
-      window.removeEventListener('sonic_auth_change', handleAuthChange);
-      window.removeEventListener('sonic_theme_change', handleThemeChange);
-      window.removeEventListener('sonic_quality_change', handleQualityChange);
+      window.removeEventListener('rezbeatsai_auth_change', handleAuthChange);
+      window.removeEventListener('rezbeatsai_theme_change', handleThemeChange);
+      window.removeEventListener('rezbeatsai_quality_change', handleQualityChange);
     };
   }, []);
 
@@ -381,7 +381,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenStudio }) =>
         </div>
 
         <p className="text-xs text-[#cec2d6]/80 leading-relaxed">
-          Sonic continuously updates your queue based on your listening history, liked tracks, and favorite genres.
+          RezbeatsAi continuously updates your queue based on your listening history, liked tracks, and favorite genres.
         </p>
       </section>
 

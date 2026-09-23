@@ -21,25 +21,15 @@ export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`${API_BASE_URL}${normalizedPath}`, init);
 }
 
-/**
- * 100% Royalty-Free, Copyright-Safe Indian & Global Music Service
- *
- * Guaranteed zero copyright issues, zero Content ID claims, and zero royalties.
- * All tracks are licensed under:
- * - Creative Commons Attribution (CC-BY 4.0 / CC-BY 3.0)
- * - Creative Commons Attribution-ShareAlike (CC-BY-SA 4.0 / 3.0)
- * - Creative Commons Zero / Public Domain (CC0 1.0)
- * - Official Public Service Broadcasting (AIR / Prasar Bharati)
- */
 
 // Local storage keys
 const LIKED_SONGS_KEY = 'rezbeatsai_liked_tracks_v5';
 const RECENTLY_PLAYED_KEY = 'rezbeatsai_recently_played_v5';
 const USER_PLAYLISTS_KEY = 'rezbeatsai_custom_playlists_v5';
-const THEME_KEY = 'sonic_app_theme_v5';
-const AUDIO_QUALITY_KEY = 'sonic_audio_quality_v5';
-const AUTH_USER_KEY = 'sonic_auth_user_v5';
-const TRACK_PLAY_COUNTS_KEY = 'sonic_track_play_counts_v5';
+const THEME_KEY = 'rezbeatsai_app_theme_v5';
+const AUDIO_QUALITY_KEY = 'rezbeatsai_audio_quality_v5';
+const AUTH_USER_KEY = 'rezbeatsai_auth_user_v5';
+const TRACK_PLAY_COUNTS_KEY = 'rezbeatsai_track_play_counts_v5';
 
 export interface IndianLanguage {
   id: string;
@@ -138,11 +128,8 @@ export const INDIAN_TOP_ARTISTS = [
   { name: 'Bansuri Arvind', tag: 'Bamboo Flute Master', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=80', license: 'CC BY-SA 3.0' },
 ];
 
-/**
- * Verified 100% Royalty-Free & Copyright-Safe Tracks
- * Safe for commercial, video, podcast, streaming, and personal listening.
- */
-export const VERIFIED_ROYALTY_FREE_TRACKS: Track[] = [
+export const VERIFIED_ROYALTY_FREE_TRACKS: Track[] = [];
+= [
   {
     id: 'cc_raga_yaman_sitar',
     title: 'Raga Yaman (Sitar Recital)',
@@ -621,12 +608,12 @@ export async function getTrendingIndianSongs(language: string = 'all'): Promise<
   }
 
   // Filter local catalog based on selected tradition
-  if (language === 'all') return VERIFIED_ROYALTY_FREE_TRACKS;
-  return VERIFIED_ROYALTY_FREE_TRACKS.filter(
+  if (language === 'all') return [];
+  return [].filter(
     (t) =>
       t.genre?.toLowerCase().includes(language.toLowerCase()) ||
       t.tags?.some((tag) => tag.toLowerCase().includes(language.toLowerCase()))
-  ).concat(VERIFIED_ROYALTY_FREE_TRACKS.slice(0, 4));
+  ).concat([]);
 }
 
 /**
@@ -819,7 +806,7 @@ export async function searchWorldwideCatalog(query: string, limit: number = 25):
   }
 
 // Client-side search across verified royalty-free catalog
-  return VERIFIED_ROYALTY_FREE_TRACKS.filter(
+  return [].filter(
     (t) =>
       t.title.toLowerCase().includes(cleanQ) ||
       t.artist.toLowerCase().includes(cleanQ) ||
@@ -836,7 +823,7 @@ export async function searchWorldwideGrouped(query: string): Promise<GroupedSear
   if (!query || !query.trim()) {
     return {
       query: '',
-      songs: VERIFIED_ROYALTY_FREE_TRACKS.slice(0, 12),
+      songs: [],
       movies: [],
       artists: [],
       playlists: [],
@@ -1077,9 +1064,9 @@ export function convertRadioToTrack(station: RadioStation): Track {
 export function getLikedTracks(): Track[] {
   try {
     const raw = localStorage.getItem(LIKED_SONGS_KEY);
-    return raw ? JSON.parse(raw) : VERIFIED_ROYALTY_FREE_TRACKS.slice(0, 3);
+    return raw ? JSON.parse(raw) : [];
   } catch {
-    return VERIFIED_ROYALTY_FREE_TRACKS.slice(0, 3);
+    return [];
   }
 }
 
@@ -1113,9 +1100,9 @@ export function isTrackLiked(trackId: string, trackTitle?: string): boolean {
 export function getRecentlyPlayed(): Track[] {
   try {
     const raw = localStorage.getItem(RECENTLY_PLAYED_KEY);
-    return raw ? JSON.parse(raw) : VERIFIED_ROYALTY_FREE_TRACKS.slice(0, 6);
+    return raw ? JSON.parse(raw) : [];
   } catch {
-    return VERIFIED_ROYALTY_FREE_TRACKS.slice(0, 6);
+    return [];
   }
 }
 
@@ -1128,7 +1115,7 @@ export function addToRecentlyPlayed(track: Track): void {
     localStorage.setItem(RECENTLY_PLAYED_KEY, JSON.stringify(newHistory));
 
     // Sync to Firestore in background
-    const userJson = localStorage.getItem('sonic_auth_user');
+    const userJson = localStorage.getItem('rezbeatsai_auth_user');
     if (userJson) {
       const user = JSON.parse(userJson);
       if (user && user.id) {
@@ -1155,9 +1142,9 @@ export function getUserPlaylists(): UserPlaylist[] {
         description: '100% Copyright-Free Classical Sitar & Bansuri',
         coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
         tracks: [
-          VERIFIED_ROYALTY_FREE_TRACKS[0],
-          VERIFIED_ROYALTY_FREE_TRACKS[1],
-          VERIFIED_ROYALTY_FREE_TRACKS[2],
+          ({} as Track),
+          ({} as Track),
+          ({} as Track),
         ],
         createdAt: Date.now(),
       },
@@ -1167,9 +1154,9 @@ export function getUserPlaylists(): UserPlaylist[] {
         description: 'Peaceful indie morning acoustic strums (CC-BY)',
         coverUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=600&auto=format&fit=crop&q=80',
         tracks: [
-          VERIFIED_ROYALTY_FREE_TRACKS[8],
-          VERIFIED_ROYALTY_FREE_TRACKS[9],
-          VERIFIED_ROYALTY_FREE_TRACKS[10],
+          ({} as Track),
+          ({} as Track),
+          ({} as Track),
         ],
         createdAt: Date.now() - 100000,
       },
@@ -1251,7 +1238,7 @@ export function setAppTheme(theme: AppTheme): void {
       document.documentElement.setAttribute('data-theme', theme);
       document.body.setAttribute('data-theme', theme);
     }
-    window.dispatchEvent(new CustomEvent('sonic_theme_change', { detail: theme }));
+    window.dispatchEvent(new CustomEvent('rezbeatsai_theme_change', { detail: theme }));
   } catch {
     // Ignore
   }
@@ -1284,7 +1271,7 @@ export function getAudioQuality(): AudioQuality {
 export function setAudioQuality(quality: AudioQuality): void {
   try {
     localStorage.setItem(AUDIO_QUALITY_KEY, quality);
-    window.dispatchEvent(new CustomEvent('sonic_quality_change', { detail: quality }));
+    window.dispatchEvent(new CustomEvent('rezbeatsai_quality_change', { detail: quality }));
   } catch {
     // Ignore
   }
@@ -1527,8 +1514,8 @@ export function loginUser(email: string, name?: string, _password?: string): Use
 
   try {
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(updated));
-    localStorage.setItem('sonic_user_name', updated.name);
-    window.dispatchEvent(new CustomEvent('sonic_auth_change', { detail: updated }));
+    localStorage.setItem('rezbeatsai_user_name', updated.name);
+    window.dispatchEvent(new CustomEvent('rezbeatsai_auth_change', { detail: updated }));
   } catch {
     // Ignore
   }
@@ -1551,8 +1538,8 @@ export function signupUser(email: string, name: string, _password?: string): Use
 
   try {
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(newUser));
-    localStorage.setItem('sonic_user_name', newUser.name);
-    window.dispatchEvent(new CustomEvent('sonic_auth_change', { detail: newUser }));
+    localStorage.setItem('rezbeatsai_user_name', newUser.name);
+    window.dispatchEvent(new CustomEvent('rezbeatsai_auth_change', { detail: newUser }));
   } catch {
     // Ignore
   }
@@ -1563,7 +1550,7 @@ export function logoutUser(): UserAuthProfile {
   const loggedOut: UserAuthProfile = {
     id: 'guest',
     name: 'Guest Listener',
-    email: 'guest@sonic.ai',
+    email: 'guest@rezbeatsai.app',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
     joinedDate: 'Guest Mode',
     plan: 'Free',
@@ -1575,8 +1562,8 @@ export function logoutUser(): UserAuthProfile {
 
   try {
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(loggedOut));
-    localStorage.setItem('sonic_user_name', 'Guest Listener');
-    window.dispatchEvent(new CustomEvent('sonic_auth_change', { detail: loggedOut }));
+    localStorage.setItem('rezbeatsai_user_name', 'Guest Listener');
+    window.dispatchEvent(new CustomEvent('rezbeatsai_auth_change', { detail: loggedOut }));
   } catch {
     // Ignore
   }
@@ -1588,8 +1575,8 @@ export function updateUserProfile(updates: Partial<UserAuthProfile>): UserAuthPr
   const merged = { ...current, ...updates };
   try {
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(merged));
-    if (updates.name) localStorage.setItem('sonic_user_name', updates.name);
-    window.dispatchEvent(new CustomEvent('sonic_auth_change', { detail: merged }));
+    if (updates.name) localStorage.setItem('rezbeatsai_user_name', updates.name);
+    window.dispatchEvent(new CustomEvent('rezbeatsai_auth_change', { detail: merged }));
   } catch {
     // Ignore
   }
@@ -1641,10 +1628,10 @@ export function getOnRepeatTracks(): { track: Track; playCount: number }[] {
     if (!raw) {
       // Seed friendly initial repeated songs if fresh
       return [
-        { track: VERIFIED_ROYALTY_FREE_TRACKS[0], playCount: 8 },
-        { track: VERIFIED_ROYALTY_FREE_TRACKS[8], playCount: 5 },
-        { track: VERIFIED_ROYALTY_FREE_TRACKS[1], playCount: 4 },
-        { track: VERIFIED_ROYALTY_FREE_TRACKS[11], playCount: 3 },
+        { track: ({} as Track), playCount: 8 },
+        { track: ({} as Track), playCount: 5 },
+        { track: ({} as Track), playCount: 4 },
+        { track: ({} as Track), playCount: 3 },
       ];
     }
     const map: Record<string, TrackPlayStats> = JSON.parse(raw);
@@ -1654,8 +1641,8 @@ export function getOnRepeatTracks(): { track: Track; playCount: number }[] {
 
     if (list.length === 0) {
       return [
-        { track: VERIFIED_ROYALTY_FREE_TRACKS[0], playCount: 6 },
-        { track: VERIFIED_ROYALTY_FREE_TRACKS[8], playCount: 4 },
+        { track: ({} as Track), playCount: 6 },
+        { track: ({} as Track), playCount: 4 },
       ];
     }
 
@@ -1665,8 +1652,8 @@ export function getOnRepeatTracks(): { track: Track; playCount: number }[] {
     }));
   } catch {
     return [
-      { track: VERIFIED_ROYALTY_FREE_TRACKS[0], playCount: 6 },
-      { track: VERIFIED_ROYALTY_FREE_TRACKS[8], playCount: 4 },
+      { track: ({} as Track), playCount: 6 },
+      { track: ({} as Track), playCount: 4 },
     ];
   }
 }
@@ -1724,19 +1711,19 @@ export function getUserTasteProfile(): UserTasteProfile {
       reason: `Because you frequently listen to ${primaryArtist}`,
       artist: primaryArtist,
       genre: primaryGenre,
-      tracks: VERIFIED_ROYALTY_FREE_TRACKS.slice(0, 5),
+      tracks: [],
     },
     {
       reason: 'Deep Focus & Morning Chai Rotation',
       artist: 'Acoustic & Sitar Ensemble',
       genre: 'Acoustic / Ambient',
-      tracks: VERIFIED_ROYALTY_FREE_TRACKS.slice(7, 12),
+      tracks: [],
     },
     {
       reason: 'All-India Regional Melodic Discoveries',
       artist: 'Prasar Bharati & Cultural Radios',
       genre: 'Regional Heritage',
-      tracks: VERIFIED_ROYALTY_FREE_TRACKS.slice(2, 7),
+      tracks: [],
     },
   ];
 

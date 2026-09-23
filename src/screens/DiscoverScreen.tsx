@@ -32,7 +32,7 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
   const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem('sonic_search_history');
+      const saved = localStorage.getItem('rezbeatsai_search_history');
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -44,9 +44,9 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
     if (!q || !q.trim()) return;
     const trimmed = q.trim();
     setRecentSearches(prev => {
-      const updated = [trimmed, ...prev.filter(item => item.toLowerCase() !== trimmed.toLowerCase())].slice(0, 10);
+      const updated = [trimmed, ...prev.filter(item => item.toLowerCase() !== trimmed.toLowerCase())].slice(0, 5);
       try {
-        localStorage.setItem('sonic_search_history', JSON.stringify(updated));
+        localStorage.setItem('rezbeatsai_search_history', JSON.stringify(updated));
       } catch {}
       return updated;
     });
@@ -326,7 +326,7 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   setRecentSearches([]);
-                  try { localStorage.removeItem('sonic_search_history'); } catch {}
+                  try { localStorage.removeItem('rezbeatsai_search_history'); } catch {}
                 }}
                 className="text-[#cec2d6]/60 hover:text-white transition-colors cursor-pointer text-[11px]"
               >

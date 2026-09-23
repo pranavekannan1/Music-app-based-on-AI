@@ -123,7 +123,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
             RezbeatsAI Music
           </h1>
           <p className="text-xs sm:text-sm text-[#cec2d6]/70">
-            {isLogin ? 'Sign in to access your high-fidelity music realm' : 'Join SonicAI for endless high-fidelity soundscapes'}
+            {isLogin ? 'Sign in to access your high-fidelity music realm' : 'Join RezbeatsAi for endless high-fidelity soundscapes'}
           </p>
 
           {/* Firebase Status Badge */}
@@ -273,7 +273,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
                 <span className="material-symbols-outlined text-base">
                   {isLogin ? 'login' : 'how_to_reg'}
                 </span>
-                <span>{isLogin ? 'Sign In to SonicAI' : 'Create My Account'}</span>
+                <span>{isLogin ? 'Sign In to RezbeatsAi' : 'Create My Account'}</span>
               </>
             )}
           </button>

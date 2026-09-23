@@ -47,8 +47,8 @@ if (isFirebaseConfigured) {
 export function formatFirebaseUser(user: User): UserAuthProfile {
   return {
     id: user.uid,
-    name: user.displayName || user.email?.split('@')[0] || 'Sonic Listener',
-    email: user.email || 'user@sonic.ai',
+    name: user.displayName || user.email?.split('@')[0] || 'RezbeatsAi Listener',
+    email: user.email || 'user@rezbeatsai.app',
     avatar:
       user.photoURL ||
       'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
@@ -78,7 +78,7 @@ export async function signupWithFirebase(
     // Graceful offline/local mode fallback when credentials are not yet entered
     const mockUser: UserAuthProfile = {
       id: `usr_${Date.now()}`,
-      name: displayName.trim() || email.split('@')[0] || 'Sonic Listener',
+      name: displayName.trim() || email.split('@')[0] || 'RezbeatsAi Listener',
       email: email.trim(),
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
       joinedDate: 'Joined Today',
@@ -114,7 +114,7 @@ export async function loginWithFirebase(
     // Graceful offline/local mode fallback
     const mockUser: UserAuthProfile = {
       id: `usr_${Date.now()}`,
-      name: email.split('@')[0] || 'Sonic Listener',
+      name: email.split('@')[0] || 'RezbeatsAi Listener',
       email: email.trim(),
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
       joinedDate: 'Joined Recently',
@@ -184,7 +184,7 @@ export async function logoutFromFirebase(): Promise<void> {
   const loggedOut: UserAuthProfile = {
     id: 'guest',
     name: 'Guest Listener',
-    email: 'guest@sonic.ai',
+    email: 'guest@rezbeatsai.app',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
     joinedDate: 'Guest Mode',
     plan: 'Free',
@@ -218,9 +218,9 @@ export function subscribeToFirebaseAuthState(
 
 function persistLocalAuth(profile: UserAuthProfile) {
   try {
-    localStorage.setItem('sonic_auth_user', JSON.stringify(profile));
-    localStorage.setItem('sonic_user_name', profile.name);
-    window.dispatchEvent(new CustomEvent('sonic_auth_change', { detail: profile }));
+    localStorage.setItem('rezbeatsai_auth_user', JSON.stringify(profile));
+    localStorage.setItem('rezbeatsai_user_name', profile.name);
+    window.dispatchEvent(new CustomEvent('rezbeatsai_auth_change', { detail: profile }));
   } catch {}
 }
 export { app };

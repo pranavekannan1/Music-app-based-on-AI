@@ -1,6 +1,6 @@
 import { Track, SmartPlaylist, UserProfile } from '../types';
 
-export const SONIC_LOGO_URL =
+export const REZBEATSAI_LOGO_URL =
   'https://lh3.googleusercontent.com/aida/AEtjO1WvbJXVTSgVkSn_a5d3mOb0ZXERLTbI8jUgCi9xIiSKQWNUQs2Kqe9NX9jrwMA6Tho_slhXXcuG3CBAjXq5yhfdXX6xamHPeJv1qZZA9pLTWm0D4bwZ2DmrQCK4sEj76ALoKt2biU9sagxaaSGRieM74yPanqSBk7N3hdxo5WeT8DC-QlYoDc7JcIdc2nqNGNVrY-CX7JAGUa2B9we40FOTBkuKCK9bXbNxLbGVamT8LWgK80MuA_sq5ipH';
 
 export const ELENA_AVATAR_LARGE =
@@ -167,7 +167,7 @@ export const ACOUSTIC_INDIE_RECOMMENDATIONS: Track[] = [
   {
     id: 'canyon-pines',
     title: 'Canyon Pines',
-    artist: 'Iron & Wine (Sonic Edit)',
+    artist: 'Iron & Wine',
     duration: '03:52',
     matchScore: 95,
     tags: ['Muted Percussion'],

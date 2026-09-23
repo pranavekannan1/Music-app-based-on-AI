@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TabType, AppTheme, AudioQuality } from '../types';
-import { SONIC_LOGO_URL } from '../data/musicData';
+import { REZBEATSAI_LOGO_URL } from '../data/musicData';
 import { getAuthUser, getAppTheme, setAppTheme, getAudioQuality } from '../services/musicService';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -26,14 +26,14 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onNavigate, onOpenQu
       if (e.detail) setQuality(e.detail);
     };
 
-    window.addEventListener('sonic_auth_change', handleAuthChange);
-    window.addEventListener('sonic_theme_change', handleThemeChange);
-    window.addEventListener('sonic_quality_change', handleQualityChange);
+    window.addEventListener('rezbeatsai_auth_change', handleAuthChange);
+    window.addEventListener('rezbeatsai_theme_change', handleThemeChange);
+    window.addEventListener('rezbeatsai_quality_change', handleQualityChange);
 
     return () => {
-      window.removeEventListener('sonic_auth_change', handleAuthChange);
-      window.removeEventListener('sonic_theme_change', handleThemeChange);
-      window.removeEventListener('sonic_quality_change', handleQualityChange);
+      window.removeEventListener('rezbeatsai_auth_change', handleAuthChange);
+      window.removeEventListener('rezbeatsai_theme_change', handleThemeChange);
+      window.removeEventListener('rezbeatsai_quality_change', handleQualityChange);
     };
   }, []);
 
@@ -77,13 +77,13 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onNavigate, onOpenQu
         >
           <div className="relative">
             <img
-              src={SONIC_LOGO_URL}
-              alt="Sonic Logo"
+              src={REZBEATSAI_LOGO_URL}
+              alt="RezbeatsAi Logo"
               className="h-8 w-auto object-contain group-hover:scale-105 transition-transform"
             />
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-xl tracking-tight text-[#e3e2e8] font-bold font-display">Sonic</span>
+            <span className="text-xl tracking-tight text-[#e3e2e8] font-bold font-display">RezbeatsAi</span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#7928ca]/25 text-[#dbb8ff] text-[10px] font-medium border border-[#dbb8ff]/20">
               <span className="w-1.5 h-1.5 rounded-full bg-[#dbb8ff] animate-pulse"></span>
               {getThemeLabel(theme)}

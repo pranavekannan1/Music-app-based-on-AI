@@ -88,7 +88,7 @@ export default function App() {
     };
 
     window.addEventListener(
-      'sonic_auth_change',
+      'rezbeatsai_auth_change',
       handleAuthChange
     );
 
@@ -98,7 +98,7 @@ export default function App() {
       }
 
       window.removeEventListener(
-        'sonic_auth_change',
+        'rezbeatsai_auth_change',
         handleAuthChange
       );
     };
@@ -146,13 +146,13 @@ export default function App() {
     };
 
     window.addEventListener(
-      'sonic_theme_change',
+      'rezbeatsai_theme_change',
       handleThemeChange
     );
 
     return () => {
       window.removeEventListener(
-        'sonic_theme_change',
+        'rezbeatsai_theme_change',
         handleThemeChange
       );
     };

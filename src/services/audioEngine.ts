@@ -82,10 +82,10 @@ class AudioEngine {
     const initPlayer = () => {
       if (!window.YT || !window.YT.Player) return;
       try {
-        const el = document.getElementById('sonic-yt-player');
+        const el = document.getElementById('rezbeatsai-yt-player');
         if (!el) return;
 
-        this.ytPlayer = new window.YT.Player('sonic-yt-player', {
+        this.ytPlayer = new window.YT.Player('rezbeatsai-yt-player', {
           height: '1',
           width: '1',
           playerVars: {

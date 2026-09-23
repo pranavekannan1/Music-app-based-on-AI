@@ -65,7 +65,7 @@ app.post('/api/ai/music-suggestions', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Prompt is required.' });
     }
 
-    const systemPrompt = `You are RezBeatsAI Music's recommendation planner.
+    const systemPrompt = `You are RezbeatsAi's recommendation planner.
 Turn the user's natural-language request into 8 useful music search suggestions.
 Do not invent songs. Prefer real artists/songs when you know them.
 Return ONLY valid JSON:
@@ -183,7 +183,8 @@ export interface RoyaltyFreeTrack {
   popularity?: number; // 0-100, source-reported worldwide listen/chart popularity, when available
 }
 
-const VERIFIED_ROYALTY_FREE_TRACKS: RoyaltyFreeTrack[] = [
+const VERIFIED_ROYALTY_FREE_TRACKS: RoyaltyFreeTrack[] = [];
+= [
   // --- Indian Classical Ragas & Traditional Heritage ---
   {
     id: 'cc_raga_yaman_sitar',
@@ -594,56 +595,8 @@ const VERIFIED_ROYALTY_FREE_TRACKS: RoyaltyFreeTrack[] = [
  * Verified public service broadcasters (Prasar Bharati / All India Radio)
  * and licensed community radios transmitting cultural, classical, and public domain programming.
  */
-const VERIFIED_OPEN_RADIOS = [
-  {
-    id: 'air-vividh-bharati',
-    name: 'AIR Vividh Bharati',
-    language: 'Hindi',
-    state: 'Mumbai',
-    genre: 'Classic Melodies & Public Heritage',
-    streamUrl: 'https://stream.zeno.fm/rm4i9pdex3cuv',
-    logo: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300&auto=format&fit=crop&q=80',
-    tagline: 'Prasar Bharati - National Public Service Broadcaster',
-    license: 'Official Public Service Broadcast',
-    licenseUrl: 'https://prasarbharati.gov.in',
-  },
-  {
-    id: 'air-telugu-one',
-    name: 'AIR Telugu One',
-    language: 'Telugu',
-    state: 'Hyderabad / Vijayawada',
-    genre: 'Carnatic, Folk & Regional Culture',
-    streamUrl: 'https://stream-151.zeno.fm/7kbt507d3qzuv',
-    logo: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&auto=format&fit=crop&q=80',
-    tagline: 'All India Radio South Regional Cultural Broadcast',
-    license: 'Official Public Service Broadcast',
-    licenseUrl: 'https://prasarbharati.gov.in',
-  },
-  {
-    id: 'radio-madhuban',
-    name: 'Radio Madhuban 90.4 FM',
-    language: 'Hindi / Devotional',
-    state: 'Rajasthan',
-    genre: 'Community Radio & Peace Meditation',
-    streamUrl: 'https://stream.zeno.fm/0zkr7x8ztm0uv?zs=WTPQx8TiQXSo11XU0iyTAQ',
-    logo: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=300&auto=format&fit=crop&q=80',
-    tagline: 'Licensed Community Broadcaster - Spiritual Harmony',
-    license: 'Licensed Community Radio Broadcast',
-    licenseUrl: 'https://radiomadhuban.in',
-  },
-  {
-    id: 'tirupati-bhakti-radio',
-    name: 'Tirupati Balaji & Bhakti Radio',
-    language: 'Sanskrit / Telugu / Hindi',
-    state: 'Andhra Pradesh',
-    genre: 'Sacred Mantras, Vedic Chants & Aartis',
-    streamUrl: 'https://radio.mslivecdn.com:6278/stream',
-    logo: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=300&auto=format&fit=crop&q=80',
-    tagline: '24/7 Traditional Sacred Broadcast',
-    license: 'Open Religious & Cultural Stream',
-    licenseUrl: 'https://www.tirumala.org',
-  },
-];
+const VERIFIED_OPEN_RADIOS: any[] = [];
+
 
 // Health endpoint
 app.get('/api/health', (req, res) => {
@@ -737,7 +690,7 @@ app.get('/api/music/copyright-guarantee', (req, res) => {
     status: 'guaranteed',
     title: '100% Copyright-Free & Royalty-Free Assurance',
     description:
-      'All audio tracks in RezBeatsAI Music are licensed under Creative Commons (CC-BY, CC-BY-SA, CC0) or Public Domain. Zero copyright strikes, zero DMCA risk, and zero Content ID claims.',
+      'All audio tracks in RezbeatsAi are licensed under Creative Commons (CC-BY, CC-BY-SA, CC0) or Public Domain. Zero copyright strikes, zero DMCA risk, and zero Content ID claims.',
     commercialUseAllowed: true,
     streamingAllowed: true,
     podcastAllowed: true,
@@ -3011,7 +2964,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RezBeatsAI Music server listening on port ${PORT}`);
+    console.log(`RezbeatsAi server listening on port ${PORT}`);
   });
 }
 

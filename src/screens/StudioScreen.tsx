@@ -49,7 +49,7 @@ export const StudioScreen: React.FC<StudioScreenProps> = ({
     {
       id: 'midnight-rain',
       title: 'Midnight Rain & Fender Rhodes',
-      artist: 'Sonic Synthesis',
+      artist: 'RezbeatsAi Synthesis',
       album: 'Original Soundscape',
       duration: '03:55',
       coverUrl:

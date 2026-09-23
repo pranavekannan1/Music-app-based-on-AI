@@ -14,9 +14,9 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({ onThemeChange, cla
     const handleThemeEvent = (e: CustomEvent<AppTheme>) => {
       setCurrentThemeState(e.detail);
     };
-    window.addEventListener('sonic_theme_change', handleThemeEvent as EventListener);
+    window.addEventListener('rezbeatsai_theme_change', handleThemeEvent as EventListener);
     return () => {
-      window.removeEventListener('sonic_theme_change', handleThemeEvent as EventListener);
+      window.removeEventListener('rezbeatsai_theme_change', handleThemeEvent as EventListener);
     };
   }, []);
 
