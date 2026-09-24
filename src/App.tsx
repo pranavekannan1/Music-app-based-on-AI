@@ -561,6 +561,29 @@ export default function App() {
     );
   };
 
+  const handleAddToQueue = (track: Track) => {
+    setQueue((prev) => {
+      const alreadyInQueue = prev.some((t) => t.id === track.id);
+      if (alreadyInQueue) return prev;
+      return [...prev, track];
+    });
+  };
+
+  const handlePlayNext = (track: Track) => {
+    setQueue((prev) => {
+      const currentIndex = queueIndexRef.current;
+      // Remove existing occurrence of the track if present
+      const filtered = prev.filter((t) => t.id !== track.id);
+      const insertAt = currentIndex + 1;
+      const next = [
+        ...filtered.slice(0, insertAt),
+        track,
+        ...filtered.slice(insertAt),
+      ];
+      return next;
+    });
+  };
+
   /*
    * ------------------------------------------------------------
    * AI STUDIO SESSION
@@ -653,6 +676,8 @@ export default function App() {
             onNavigateTab={setCurrentTab}
             currentTrackId={currentTrack.id}
             isPlaying={isPlaying}
+            onAddToQueue={handleAddToQueue}
+            onPlayNext={handlePlayNext}
           />
         )}
 
@@ -661,6 +686,8 @@ export default function App() {
             onPlayTrack={playTrack}
             currentTrackId={currentTrack.id}
             isPlaying={isPlaying}
+            onAddToQueue={handleAddToQueue}
+            onPlayNext={handlePlayNext}
           />
         )}
 

@@ -11,13 +11,16 @@ declare global {
   }
 }
 
+const SILENT_AUDIO_URI =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+
 /**
  * Universal Audio Engine for RezBeatsAI Music
  * Supports:
  * - Direct lossless/320kbps audio streams via HTMLAudioElement
- * - YouTube IFrame background audio playback for infinite new & old song catalog without proxy blocks
- * - Preview-only tracks (iTunes / Deezer 30s clips) are matched to a YouTube video and played in full
- * - Generative ambient harmonic synthesizer (Web Audio API) as fallback/soundscapes
+ * - YouTube IFrame background audio playback with persistent background keep-alive for mobile & web
+ * - MediaSession API integration for OS Lock Screen / notification controls & scrub bars
+ * - Automatic background playback continuation on app minimize or screen lock
  * - Real-time progress synchronization with onTimeUpdate() & seek()
  * - Frequency analysis for visualizers and live EQ
  */
@@ -25,6 +28,7 @@ class AudioEngine {
   private audioEl: HTMLAudioElement | null = null;
   private currentTrack: Track | null = null;
   private isPlaying: boolean = false;
+  private userWantsPlay: boolean = false;
   private volume: number = 0.8;
   private isUsingHtmlAudio: boolean = false;
   private isUsingYouTube: boolean = false;
@@ -75,6 +79,69 @@ class AudioEngine {
     if (typeof window !== 'undefined') {
       this.initAudioElement();
       this.setupYouTubeApi();
+      this.setupBackgroundKeepAlive();
+    }
+  }
+
+  /**
+   * Prevents mobile browsers and desktop tabs from killing audio when minimized or locked.
+   * Maintains active AudioContext / HTMLAudioElement so the OS media thread remains active.
+   */
+  private setupBackgroundKeepAlive() {
+    if (typeof document === 'undefined') return;
+
+    const resumeIfWanted = () => {
+      if (!this.userWantsPlay) return;
+      if (this.isUsingYouTube && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+        try {
+          this.ytPlayer.playVideo();
+        } catch {}
+        this.startSilentKeepAlive();
+      }
+      if (this.isUsingHtmlAudio && this.audioEl && this.audioEl.paused && this.audioEl.src !== SILENT_AUDIO_URI) {
+        this.audioEl.play().catch(() => {});
+      }
+    };
+
+    document.addEventListener('visibilitychange', () => {
+      if (this.userWantsPlay) {
+        resumeIfWanted();
+        window.setTimeout(resumeIfWanted, 300);
+        window.setTimeout(resumeIfWanted, 1000);
+      }
+    });
+
+    window.addEventListener('pagehide', () => {
+      if (this.userWantsPlay) {
+        resumeIfWanted();
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      if (this.userWantsPlay && !this.isPlaying) {
+        resumeIfWanted();
+      }
+    });
+  }
+
+  /**
+   * Plays a 0-volume silent audio loop in the top-level HTMLAudioElement.
+   * This is required by mobile OSs (iOS & Android) to grant background audio permissions
+   * and display Lock Screen controls for iframe-based streams.
+   */
+  private startSilentKeepAlive() {
+    if (!this.audioEl) {
+      this.initAudioElement();
+    }
+    if (this.audioEl) {
+      try {
+        if (this.audioEl.src !== SILENT_AUDIO_URI) {
+          this.audioEl.src = SILENT_AUDIO_URI;
+        }
+        this.audioEl.loop = true;
+        this.audioEl.volume = 0.001; // Whisper quiet so native background media session stays active
+        this.audioEl.play().catch(() => {});
+      } catch {}
     }
   }
 
@@ -111,16 +178,33 @@ class AudioEngine {
               }
             },
             onStateChange: (event: any) => {
-              // Ignore late events from a video we already paused/replaced (they'd flip isPlaying or skip the queue)
               if (!this.isUsingYouTube) return;
               // YT.PlayerState: -1 unstarted, 0 ENDED, 1 PLAYING, 2 PAUSED, 3 BUFFERING
               if (event.data === 1) {
                 this.isPlaying = true;
+                this.userWantsPlay = true;
                 this.startYtProgressPolling();
                 this.reportPlayOnce();
+                this.startSilentKeepAlive();
+                if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+                  navigator.mediaSession.playbackState = 'playing';
+                }
               } else if (event.data === 2) {
-                this.isPlaying = false;
-                this.stopYtProgressPolling();
+                // If YouTube paused because tab minimized or screen locked, auto-resume if user wants play
+                if (this.userWantsPlay && typeof document !== 'undefined' && document.hidden) {
+                  try {
+                    this.ytPlayer.playVideo();
+                    this.startSilentKeepAlive();
+                    return;
+                  } catch {}
+                }
+                if (!this.userWantsPlay) {
+                  this.isPlaying = false;
+                  this.stopYtProgressPolling();
+                  if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+                    navigator.mediaSession.playbackState = 'paused';
+                  }
+                }
               } else if (event.data === 0) {
                 this.isPlaying = false;
                 this.stopYtProgressPolling();
@@ -131,7 +215,6 @@ class AudioEngine {
               }
             },
             onError: (err: any) => {
-              // 2 bad id, 5 html5 error, 100 removed/private, 101/150 embedding disabled by owner
               console.warn('YouTube Player error code:', err?.data);
               this.handleYtError();
             },
@@ -335,6 +418,22 @@ class AudioEngine {
   }
 
   private notifyTimeUpdate(currentTime: number, duration: number) {
+    if (
+      typeof window !== 'undefined' &&
+      'mediaSession' in navigator &&
+      'setPositionState' in navigator.mediaSession
+    ) {
+      try {
+        if (duration > 0 && currentTime >= 0 && currentTime <= duration) {
+          navigator.mediaSession.setPositionState({
+            duration: Math.max(1, duration),
+            playbackRate: 1,
+            position: Math.min(currentTime, duration),
+          });
+        }
+      } catch {}
+    }
+
     for (const listener of this.timeListeners) {
       try {
         listener(currentTime, duration);
@@ -358,6 +457,7 @@ class AudioEngine {
    * Play a specific Track (handles YouTube, previewUrl, direct stream, or YouTube match lookup)
    */
   public playTrack(track: Track) {
+    this.userWantsPlay = true;
     const token = ++this.playToken;
     this.currentTrack = track;
     this.playReportedFor = null;
@@ -441,10 +541,7 @@ class AudioEngine {
     this.ytCandidateIdx = 0;
     this.isUsingHtmlAudio = false;
     this.isUsingYouTube = true;
-    if (this.audioEl) {
-      this.audioEl.pause();
-      this.audioEl.src = '';
-    }
+    this.startSilentKeepAlive();
     this.playYouTubeVideo(ids[0]);
 
     // If the YouTube IFrame API never loads (ad-blocker, offline), don't hang silently.
@@ -518,6 +615,7 @@ class AudioEngine {
     this.initAudioElement();
 
     if (this.audioEl) {
+      this.audioEl.loop = false;
       this.audioEl.src = streamUrl;
       this.audioEl.currentTime = 0;
       this.audioEl.volume = this.volume;
@@ -525,6 +623,7 @@ class AudioEngine {
         .play()
         .then(() => {
           this.isPlaying = true;
+          this.userWantsPlay = true;
           if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'playing';
           }
@@ -574,14 +673,28 @@ class AudioEngine {
   public setMediaSessionHandlers(onPlay: () => void, onPause: () => void, onNext: () => void, onPrev: () => void) {
     if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
       try {
-        navigator.mediaSession.setActionHandler('play', onPlay);
-        navigator.mediaSession.setActionHandler('pause', onPause);
+        navigator.mediaSession.setActionHandler('play', () => {
+          this.userWantsPlay = true;
+          onPlay();
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          this.userWantsPlay = false;
+          onPause();
+        });
         navigator.mediaSession.setActionHandler('nexttrack', onNext);
         navigator.mediaSession.setActionHandler('previoustrack', onPrev);
         navigator.mediaSession.setActionHandler('seekto', (details) => {
           if (details.seekTime !== undefined) {
             this.seek(details.seekTime);
           }
+        });
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+          const skip = details.seekOffset || 10;
+          this.seek(this.getCurrentTime() + skip);
+        });
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+          const skip = details.seekOffset || 10;
+          this.seek(Math.max(0, this.getCurrentTime() - skip));
         });
       } catch (err) {
         console.warn('Failed to bind media session action handlers:', err);
@@ -622,6 +735,7 @@ class AudioEngine {
   }
 
   public play() {
+    this.userWantsPlay = true;
     if (this.isPlaying) return;
 
     if (this.isUsingYouTube && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
@@ -629,11 +743,15 @@ class AudioEngine {
         this.ytPlayer.playVideo();
         this.isPlaying = true;
         this.startYtProgressPolling();
+        this.startSilentKeepAlive();
+        if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'playing';
+        }
         return;
       } catch {}
     }
 
-    if (this.isUsingHtmlAudio && this.audioEl && this.audioEl.src) {
+    if (this.isUsingHtmlAudio && this.audioEl && this.audioEl.src && this.audioEl.src !== SILENT_AUDIO_URI) {
       this.audioEl
         .play()
         .then(() => {
@@ -655,6 +773,7 @@ class AudioEngine {
   }
 
   public pause() {
+    this.userWantsPlay = false;
     this.isPlaying = false;
 
     if (this.isUsingYouTube && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {

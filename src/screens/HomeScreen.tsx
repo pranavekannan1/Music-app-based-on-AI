@@ -30,6 +30,8 @@ interface HomeScreenProps {
   onNavigateTab?: (tab: TabType) => void;
   currentTrackId?: string;
   isPlaying?: boolean;
+  onAddToQueue?: (track: Track) => void;
+  onPlayNext?: (track: Track) => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -38,6 +40,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateTab,
   currentTrackId,
   isPlaying,
+  onAddToQueue,
+  onPlayNext,
 }) => {
   const [userName, setUserName] = useState<string>('Pranav');
   const [userLocation, setUserLocation] = useState<UserLocationInfo | null>(null);
@@ -68,6 +72,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   });
   const [showSearchHistory, setShowSearchHistory] = useState<boolean>(false);
+  const [openMenuTrackId, setOpenMenuTrackId] = useState<string | null>(null);
 
   const addRecentSearch = (q: string) => {
     if (!q || !q.trim()) return;
@@ -284,6 +289,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     showToast(liked ? `Added "${track.title}" to Liked Songs` : `Removed "${track.title}"`);
     refreshUserData();
   };
+
+  const handleTrackMenuAction = (e: React.MouseEvent, action: 'playNext' | 'addToQueue' | 'like', track: Track) => {
+    e.stopPropagation();
+    setOpenMenuTrackId(null);
+    if (action === 'playNext') {
+      onPlayNext?.(track);
+      showToast(`"${track.title}" will play next`);
+    } else if (action === 'addToQueue') {
+      onAddToQueue?.(track);
+      showToast(`"${track.title}" added to queue`);
+    } else if (action === 'like') {
+      const liked = saveLikedTrack(track);
+      showToast(liked ? `Added "${track.title}" to Liked Songs` : `Removed "${track.title}"`);
+      refreshUserData();
+    }
+  };
+
+  // Dismiss context menus on outside click
+  React.useEffect(() => {
+    if (!openMenuTrackId) return;
+    const handleOutside = () => setOpenMenuTrackId(null);
+    document.addEventListener('click', handleOutside, { capture: true });
+    return () => document.removeEventListener('click', handleOutside, { capture: true });
+  }, [openMenuTrackId]);
 
   const currentLangObj = INDIAN_LANGUAGES.find((l) => l.id === selectedLanguage);
 
@@ -593,16 +622,46 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       <span className="text-xs font-mono text-[#cec2d6]/60">
                         {track.duration || '3:30'}
                       </span>
-                      <button
-                        onClick={(e) => handleToggleLike(e, track)}
-                        className={`p-1.5 transition-colors ${
-                          liked ? 'text-rose-500' : 'text-[#cec2d6]/50 hover:text-white'
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-base">
-                          {liked ? 'favorite' : 'favorite_border'}
-                        </span>
-                      </button>
+                      {/* 3-dot context menu */}
+                      <div className="relative" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuTrackId(openMenuTrackId === track.id ? null : track.id);
+                          }}
+                          className="p-1.5 text-[#cec2d6]/50 hover:text-white transition-colors rounded-full hover:bg-white/[0.06]"
+                          title="More options"
+                        >
+                          <span className="material-symbols-outlined text-base">more_vert</span>
+                        </button>
+
+                        {openMenuTrackId === track.id && (
+                          <div className="absolute right-0 bottom-full mb-1 z-50 min-w-[170px] bg-[#1e1f28] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+                            <button
+                              onClick={(e) => handleTrackMenuAction(e, 'playNext', track)}
+                              className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-base text-[#dbb8ff]">skip_next</span>
+                              Play Next
+                            </button>
+                            <button
+                              onClick={(e) => handleTrackMenuAction(e, 'addToQueue', track)}
+                              className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-base text-[#dbb8ff]">queue_music</span>
+                              Add to Queue
+                            </button>
+                            <div className="h-px bg-white/[0.06] mx-2" />
+                            <button
+                              onClick={(e) => handleTrackMenuAction(e, 'like', track)}
+                              className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-rose-500/20 hover:text-rose-400 transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-base text-rose-400">{isTrackLiked(track.id, track.title) ? 'favorite' : 'favorite_border'}</span>
+                              {isTrackLiked(track.id, track.title) ? 'Unlike' : 'Like'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

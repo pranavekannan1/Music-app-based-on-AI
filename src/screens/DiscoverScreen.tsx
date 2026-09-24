@@ -19,6 +19,8 @@ interface DiscoverScreenProps {
   onPlayTrack: (track: Track, queue?: Track[]) => void;
   currentTrackId?: string;
   isPlaying?: boolean;
+  onAddToQueue?: (track: Track) => void;
+  onPlayNext?: (track: Track) => void;
 }
 
 type SearchCategoryTab = 'all' | 'movies' | 'artists' | 'playlists' | 'songs';
@@ -27,6 +29,8 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
   onPlayTrack,
   currentTrackId,
   isPlaying,
+  onAddToQueue,
+  onPlayNext,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<SearchSuggestionItem[]>([]);
@@ -120,6 +124,35 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
   const [groupedResults, setGroupedResults] = useState<GroupedSearchResults | null>(null);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [userRegion, setUserRegion] = useState<string>('India');
+  const [openMenuTrackId, setOpenMenuTrackId] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const handleSongMenuAction = (e: React.MouseEvent, action: 'playNext' | 'addToQueue' | 'like', trk: Track) => {
+    e.stopPropagation();
+    setOpenMenuTrackId(null);
+    if (action === 'playNext') {
+      onPlayNext?.(trk);
+      showToast(`"${trk.title}" will play next`);
+    } else if (action === 'addToQueue') {
+      onAddToQueue?.(trk);
+      showToast(`"${trk.title}" added to queue`);
+    } else if (action === 'like') {
+      saveLikedTrack(trk);
+      showToast(`Saved "${trk.title}" to liked songs`);
+    }
+  };
+
+  // Dismiss context menus on outside click
+  React.useEffect(() => {
+    if (!openMenuTrackId) return;
+    const handleOutside = () => setOpenMenuTrackId(null);
+    document.addEventListener('click', handleOutside, { capture: true });
+    return () => document.removeEventListener('click', handleOutside, { capture: true });
+  }, [openMenuTrackId]);
 
 
 
@@ -665,19 +698,32 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
                                     <span className="text-xs font-mono text-[#cec2d6]/60">
                                       {trk.duration}
                                     </span>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        saveLikedTrack(trk);
-                                        setToastMessage(`Saved "${trk.title}" to liked songs`);
-                                        setTimeout(() => setToastMessage(null), 2000);
-                                      }}
-                                      className="p-1 text-[#cec2d6]/60 hover:text-rose-500 transition-colors"
-                                    >
-                                      <span className="material-symbols-outlined text-base">
-                                        favorite_border
-                                      </span>
-                                    </button>
+                                    {/* 3-dot context menu */}
+                                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenMenuTrackId(openMenuTrackId === trk.id ? null : trk.id);
+                                        }}
+                                        className="p-1 text-[#cec2d6]/50 hover:text-white transition-colors rounded-full hover:bg-white/[0.06]"
+                                      >
+                                        <span className="material-symbols-outlined text-base">more_vert</span>
+                                      </button>
+                                      {openMenuTrackId === trk.id && (
+                                        <div className="absolute right-0 bottom-full mb-1 z-50 min-w-[160px] bg-[#1e1f28] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+                                          <button onClick={(e) => handleSongMenuAction(e, 'playNext', trk)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors">
+                                            <span className="material-symbols-outlined text-sm text-[#dbb8ff]">skip_next</span>Play Next
+                                          </button>
+                                          <button onClick={(e) => handleSongMenuAction(e, 'addToQueue', trk)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors">
+                                            <span className="material-symbols-outlined text-sm text-[#dbb8ff]">queue_music</span>Add to Queue
+                                          </button>
+                                          <div className="h-px bg-white/[0.06] mx-2" />
+                                          <button onClick={(e) => handleSongMenuAction(e, 'like', trk)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-rose-500/20 hover:text-rose-400 transition-colors">
+                                            <span className="material-symbols-outlined text-sm text-rose-400">favorite_border</span>Like
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -825,19 +871,32 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
                                     <span className="text-xs font-mono text-[#cec2d6]/60">
                                       {trk.duration}
                                     </span>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        saveLikedTrack(trk);
-                                        setToastMessage(`Saved "${trk.title}" to liked songs`);
-                                        setTimeout(() => setToastMessage(null), 2000);
-                                      }}
-                                      className="p-1 text-[#cec2d6]/60 hover:text-rose-500 transition-colors"
-                                    >
-                                      <span className="material-symbols-outlined text-base">
-                                        favorite_border
-                                      </span>
-                                    </button>
+                                    {/* 3-dot context menu */}
+                                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenMenuTrackId(openMenuTrackId === trk.id ? null : trk.id);
+                                        }}
+                                        className="p-1 text-[#cec2d6]/50 hover:text-white transition-colors rounded-full hover:bg-white/[0.06]"
+                                      >
+                                        <span className="material-symbols-outlined text-base">more_vert</span>
+                                      </button>
+                                      {openMenuTrackId === trk.id && (
+                                        <div className="absolute right-0 bottom-full mb-1 z-50 min-w-[160px] bg-[#1e1f28] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+                                          <button onClick={(e) => handleSongMenuAction(e, 'playNext', trk)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors">
+                                            <span className="material-symbols-outlined text-sm text-[#dbb8ff]">skip_next</span>Play Next
+                                          </button>
+                                          <button onClick={(e) => handleSongMenuAction(e, 'addToQueue', trk)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors">
+                                            <span className="material-symbols-outlined text-sm text-[#dbb8ff]">queue_music</span>Add to Queue
+                                          </button>
+                                          <div className="h-px bg-white/[0.06] mx-2" />
+                                          <button onClick={(e) => handleSongMenuAction(e, 'like', trk)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-rose-500/20 hover:text-rose-400 transition-colors">
+                                            <span className="material-symbols-outlined text-sm text-rose-400">favorite_border</span>Like
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -1000,18 +1059,32 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
                                         <span className="text-xs font-mono text-[#cec2d6]/60">
                                           {trk.duration}
                                         </span>
-                                        <button
-                                          onClick={() => {
-                                            saveLikedTrack(trk);
-                                            setToastMessage(`Saved "${trk.title}" to liked songs`);
-                                            setTimeout(() => setToastMessage(null), 2000);
-                                          }}
-                                          className="p-1 text-[#cec2d6]/60 hover:text-rose-500 transition-colors"
-                                        >
-                                          <span className="material-symbols-outlined text-base">
-                                            favorite_border
-                                          </span>
-                                        </button>
+                                        {/* 3-dot context menu */}
+                                        <div className="relative">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setOpenMenuTrackId(openMenuTrackId === trk.id ? null : trk.id);
+                                            }}
+                                            className="p-1 text-[#cec2d6]/50 hover:text-white transition-colors rounded-full hover:bg-white/[0.06]"
+                                          >
+                                            <span className="material-symbols-outlined text-base">more_vert</span>
+                                          </button>
+                                          {openMenuTrackId === trk.id && (
+                                            <div className="absolute right-0 bottom-full mb-1 z-50 min-w-[160px] bg-[#1e1f28] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+                                              <button onClick={(e) => handleSongMenuAction(e, 'playNext', trk)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors">
+                                                <span className="material-symbols-outlined text-sm text-[#dbb8ff]">skip_next</span>Play Next
+                                              </button>
+                                              <button onClick={(e) => handleSongMenuAction(e, 'addToQueue', trk)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors">
+                                                <span className="material-symbols-outlined text-sm text-[#dbb8ff]">queue_music</span>Add to Queue
+                                              </button>
+                                              <div className="h-px bg-white/[0.06] mx-2" />
+                                              <button onClick={(e) => handleSongMenuAction(e, 'like', trk)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-rose-500/20 hover:text-rose-400 transition-colors">
+                                                <span className="material-symbols-outlined text-sm text-rose-400">favorite_border</span>Like
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
                                         <button
                                           onClick={() => onPlayTrack(trk, playlist.songs)}
                                           className="w-7 h-7 rounded-full bg-[#1db954] text-[#003b14] flex items-center justify-center font-bold hover:scale-105 active:scale-95 transition-all"
@@ -1106,23 +1179,36 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                           <span className="text-xs font-mono text-[#cec2d6]/60">
                             {track.duration}
                           </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              saveLikedTrack(track);
-                              setToastMessage(`Saved "${track.title}" to liked songs`);
-                              setTimeout(() => setToastMessage(null), 2000);
-                            }}
-                            className="p-1 text-[#cec2d6]/60 hover:text-rose-500 transition-colors"
-                          >
-                            <span className="material-symbols-outlined text-lg">
-                              favorite_border
-                            </span>
-                          </button>
+                          {/* 3-dot context menu */}
+                          <div className="relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuTrackId(openMenuTrackId === track.id ? null : track.id);
+                              }}
+                              className="p-1 text-[#cec2d6]/50 hover:text-white transition-colors rounded-full hover:bg-white/[0.06]"
+                            >
+                              <span className="material-symbols-outlined text-lg">more_vert</span>
+                            </button>
+                            {openMenuTrackId === track.id && (
+                              <div className="absolute right-0 bottom-full mb-1 z-50 min-w-[160px] bg-[#1e1f28] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+                                <button onClick={(e) => handleSongMenuAction(e, 'playNext', track)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors">
+                                  <span className="material-symbols-outlined text-sm text-[#dbb8ff]">skip_next</span>Play Next
+                                </button>
+                                <button onClick={(e) => handleSongMenuAction(e, 'addToQueue', track)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-[#7928ca]/30 hover:text-[#dbb8ff] transition-colors">
+                                  <span className="material-symbols-outlined text-sm text-[#dbb8ff]">queue_music</span>Add to Queue
+                                </button>
+                                <div className="h-px bg-white/[0.06] mx-2" />
+                                <button onClick={(e) => handleSongMenuAction(e, 'like', track)} className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-semibold text-[#e3e2e8] hover:bg-rose-500/20 hover:text-rose-400 transition-colors">
+                                  <span className="material-symbols-outlined text-sm text-rose-400">favorite_border</span>Like
+                                </button>
+                              </div>
+                            )}
+                          </div>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
