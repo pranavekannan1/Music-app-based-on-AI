@@ -145,7 +145,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
   }, 0);
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0c0d12] text-[#f1f0f7] flex flex-col justify-between overflow-y-auto overflow-x-hidden select-none animate-fade-in">
+    <div className="fixed inset-x-0 top-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 bg-[#0c0d12] text-[#f1f0f7] flex flex-col justify-between overflow-y-auto overflow-x-hidden select-none animate-fade-in">
       {/* Dynamic atmospheric background glow */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[550px] h-[550px] bg-[#7928ca]/25 rounded-full blur-[150px]"></div>

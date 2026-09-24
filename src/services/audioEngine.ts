@@ -86,16 +86,17 @@ class AudioEngine {
         if (!el) return;
 
         this.ytPlayer = new window.YT.Player('rezbeatsai-yt-player', {
-          height: '1',
-          width: '1',
+          height: '200',
+          width: '200',
           playerVars: {
-            autoplay: 0,
+            autoplay: 1,
             controls: 0,
             disablekb: 1,
             fs: 0,
             modestbranding: 1,
             playsinline: 1,
             rel: 0,
+            origin: typeof window !== 'undefined' ? window.location.origin : undefined,
           },
           events: {
             onReady: () => {
@@ -131,7 +132,7 @@ class AudioEngine {
             },
             onError: (err: any) => {
               // 2 bad id, 5 html5 error, 100 removed/private, 101/150 embedding disabled by owner
-              console.warn('YouTube Player error:', err?.data);
+              console.warn('YouTube Player error code:', err?.data);
               this.handleYtError();
             },
           },
@@ -172,17 +173,51 @@ class AudioEngine {
   }
 
   private extractYouTubeId(track: Track): string | null {
-    if (track.id && track.id.startsWith('yt_')) {
-      return track.id.replace('yt_', '');
+    if (!track) return null;
+
+    // Check track.id prefixes and bare 11-char IDs
+    if (track.id) {
+      if (track.id.startsWith('youtube_')) {
+        const id = track.id.replace('youtube_', '');
+        if (/^[\w-]{11}$/.test(id)) return id;
+      }
+      if (track.id.startsWith('youtube-')) {
+        const id = track.id.replace('youtube-', '');
+        if (/^[\w-]{11}$/.test(id)) return id;
+      }
+      if (track.id.startsWith('yt_')) {
+        const id = track.id.replace('yt_', '');
+        if (/^[\w-]{11}$/.test(id)) return id;
+      }
+      if (track.id.startsWith('yt-')) {
+        const id = track.id.replace('yt-', '');
+        if (/^[\w-]{11}$/.test(id)) return id;
+      }
+      if (/^[\w-]{11}$/.test(track.id)) {
+        return track.id;
+      }
     }
+
+    // Check audioUrl
     if (track.audioUrl) {
-      const match = track.audioUrl.match(/[?&]id=([^&]+)/);
-      if (match) return match[1];
+      const match =
+        track.audioUrl.match(/(?:v=|youtu\.be\/|embed\/|[?&]id=|[?&]v=)([\w-]{11})/) ||
+        track.audioUrl.match(/[?&]id=([^&]+)/);
+      if (match && /^[\w-]{11}$/.test(match[1])) return match[1];
     }
+
+    // Check sourceUrl
     if (track.sourceUrl) {
-      const match = track.sourceUrl.match(/(?:v=|youtu\.be\/)([^&?/]+)/);
-      if (match) return match[1];
+      const match = track.sourceUrl.match(/(?:v=|youtu\.be\/|embed\/|[?&]v=)([\w-]{11})/);
+      if (match && /^[\w-]{11}$/.test(match[1])) return match[1];
     }
+
+    // Check previewUrl
+    if (track.previewUrl) {
+      const match = track.previewUrl.match(/(?:v=|youtu\.be\/|embed\/|[?&]id=|[?&]v=)([\w-]{11})/);
+      if (match && /^[\w-]{11}$/.test(match[1])) return match[1];
+    }
+
     return null;
   }
 
@@ -203,7 +238,7 @@ class AudioEngine {
       this.startYtProgressPolling();
     } catch (err) {
       console.warn('YouTube loadVideoById failed:', err);
-      this.startGenerativeFallback();
+      this.handleYtError();
     }
   }
 
@@ -243,8 +278,12 @@ class AudioEngine {
 
     this.audioEl.addEventListener('error', (e) => {
       if (!this.isUsingHtmlAudio) return;
-      console.warn('Audio stream playback error, falling back to ambient generative engine:', e);
-      this.startGenerativeFallback();
+      console.warn('Audio stream playback error, attempting YouTube lookup fallback:', e);
+      if (this.currentTrack) {
+        void this.playFullSongForPreviewTrack(this.currentTrack, undefined, ++this.playToken);
+      } else {
+        this.startGenerativeFallback();
+      }
     });
   }
 
@@ -316,7 +355,7 @@ class AudioEngine {
   }
 
   /**
-   * Play a specific Track (handles YouTube, previewUrl, direct stream, or generative synthesis)
+   * Play a specific Track (handles YouTube, previewUrl, direct stream, or YouTube match lookup)
    */
   public playTrack(track: Track) {
     const token = ++this.playToken;
@@ -333,15 +372,12 @@ class AudioEngine {
     if (ytId) {
       // 1. Play via YouTube Audio background player
       this.startYouTubeCandidates([ytId]);
-    } else if (this.isPreviewOnly(track, streamUrl)) {
-      // 2. Catalog track that only has a ~30s clip: find the full song on YouTube
-      void this.playFullSongForPreviewTrack(track, streamUrl, token);
-    } else if (streamUrl && !streamUrl.includes('resolve-yt-audio')) {
-      // 3. Play direct audio stream (e.g. JioSaavn 320kbps or local audio)
+    } else if (streamUrl && !this.isPreviewOnly(track, streamUrl) && !streamUrl.includes('resolve-yt-audio')) {
+      // 2. Play direct audio stream (e.g. JioSaavn 320kbps or local audio)
       this.playDirectStream(streamUrl);
     } else {
-      // 4. Ambient generative synthesizer fallback
-      this.startGenerativeFallback();
+      // 3. Track has no direct stream or only has a preview clip: find the full song on YouTube!
+      void this.playFullSongForPreviewTrack(track, streamUrl, token);
     }
   }
 
@@ -359,7 +395,7 @@ class AudioEngine {
     this.notifyTimeUpdate(0, track.durationSec || 0);
 
     let ids = this.ytMatchCache.get(track.id);
-    if (!ids) {
+    if (!ids || ids.length === 0) {
       ids = await findYouTubeMatches(track);
       if (token !== this.playToken) return; // user skipped to another track
       if (ids.length > 0) this.ytMatchCache.set(track.id, ids);
@@ -367,20 +403,20 @@ class AudioEngine {
     if (token !== this.playToken) return;
     if (!this.isPlaying) return; // paused during lookup; play() will call playTrack() again (cache is warm)
 
-    if (ids.length > 0) {
+    if (ids && ids.length > 0) {
       this.startYouTubeCandidates(ids);
     } else if (previewUrl) {
-      console.warn('No full-length match found, playing 30s preview:', track.title);
+      console.warn('No full-length match found, playing available preview:', track.title);
       this.playDirectStream(previewUrl);
     } else {
+      console.warn('No audio stream or YouTube video found for track:', track.title);
       this.startGenerativeFallback();
     }
   }
 
   /** Look up (and cache) the YouTube match for a track before it is needed, e.g. the next one in the queue. */
   public warmYouTubeMatch(track: Track) {
-    const url = track.audioUrl || track.previewUrl;
-    if (!this.isPreviewOnly(track, url) || this.ytMatchCache.has(track.id)) return;
+    if (!track || this.extractYouTubeId(track) || this.ytMatchCache.has(track.id)) return;
     findYouTubeMatches(track).then((ids) => {
       if (ids.length > 0) this.ytMatchCache.set(track.id, ids);
     });
@@ -423,16 +459,33 @@ class AudioEngine {
     }
   }
 
-  /** Current YouTube candidate failed (removed / embedding disabled): try the next, else fall back. */
-  private handleYtError() {
+  /** Current YouTube candidate failed (removed / embedding disabled): try the next, else search alternative. */
+  private async handleYtError() {
     if (!this.isUsingYouTube) return; // stale error from a video we already moved on from
     if (this.ytCandidateIdx + 1 < this.ytCandidates.length) {
       this.ytCandidateIdx += 1;
       this.playYouTubeVideo(this.ytCandidates[this.ytCandidateIdx]);
       return;
     }
-    // Every candidate failed: forget the match so a later play can look it up again.
-    if (this.currentTrack) this.ytMatchCache.delete(this.currentTrack.id);
+
+    // Try finding alternative audio/lyric matches on YouTube before giving up
+    if (this.currentTrack) {
+      this.ytMatchCache.delete(this.currentTrack.id);
+      try {
+        const query = `${this.currentTrack.title} ${this.currentTrack.artist || ''} audio`;
+        const additionalMatches = await findYouTubeMatches({
+          title: query,
+          artist: '',
+          durationSec: this.currentTrack.durationSec,
+        });
+        const newCandidates = additionalMatches.filter((id) => !this.ytCandidates.includes(id));
+        if (newCandidates.length > 0) {
+          this.startYouTubeCandidates(newCandidates);
+          return;
+        }
+      } catch {}
+    }
+
     this.fallbackFromYouTube();
   }
 
@@ -478,8 +531,12 @@ class AudioEngine {
           this.reportPlayOnce();
         })
         .catch((err) => {
-          console.warn('HTML Audio play rejected:', err);
-          this.startGenerativeFallback();
+          console.warn('HTML Audio play rejected, attempting YouTube lookup fallback:', err);
+          if (this.currentTrack) {
+            void this.playFullSongForPreviewTrack(this.currentTrack, undefined, ++this.playToken);
+          } else {
+            this.startGenerativeFallback();
+          }
         });
     }
   }
@@ -532,10 +589,15 @@ class AudioEngine {
     }
   }
 
+  /**
+   * Safe graceful fallback when a track cannot be played:
+   * Stops audio and advances to the next track without buzzing or artificial noise.
+   */
   private startGenerativeFallback() {
     this.isUsingHtmlAudio = false;
     this.isUsingYouTube = false;
     this.stopYtProgressPolling();
+    this.stopGenerativeSynth(); // NEVER play detuned oscillator buzzing sounds
 
     if (this.audioEl) {
       this.audioEl.pause();
@@ -546,27 +608,15 @@ class AudioEngine {
       } catch {}
     }
 
-    this.synthCurrentTime = 0;
-    // Use track duration if available, or default looping ambient mode (never ends)
-    this.synthTotalDuration = this.currentTrack?.durationSec || 0;
-    this.playGenerativeSynth();
+    console.warn('Track failed to play across all audio sources:', this.currentTrack?.title);
+    this.isPlaying = false;
 
-    if (this.synthTimer) {
-      window.clearInterval(this.synthTimer);
-    }
-
-    // Only simulate time progress if we have a known finite duration.
-    // NEVER fire notifyEnded() from the synth — only real audio sources should trigger track advancement.
-    // This prevents tracks from auto-skipping without user action.
-    if (this.synthTotalDuration > 0) {
-      this.synthTimer = window.setInterval(() => {
-        if (!this.isPlaying) return;
-        this.synthCurrentTime += 1;
-        // Loop the synth ambient audio continuously; do NOT call notifyEnded()
-        if (this.synthCurrentTime >= this.synthTotalDuration) {
-          this.synthCurrentTime = 0; // Loop back
+    // Gracefully advance to the next song in the queue after a brief delay
+    if (!this.isLiveRadio) {
+      window.setTimeout(() => {
+        if (!this.isPlaying && this.currentTrack) {
+          this.notifyEnded();
         }
-        this.notifyTimeUpdate(this.synthCurrentTime, this.synthTotalDuration);
       }, 1000);
     }
   }
@@ -593,12 +643,14 @@ class AudioEngine {
           }
         })
         .catch(() => {
-          this.startGenerativeFallback();
+          if (this.currentTrack) {
+            void this.playFullSongForPreviewTrack(this.currentTrack, undefined, ++this.playToken);
+          }
         });
     } else if (this.currentTrack) {
       this.playTrack(this.currentTrack);
     } else {
-      this.playGenerativeSynth();
+      this.isPlaying = false;
     }
   }
 

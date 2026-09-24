@@ -12,6 +12,7 @@ import {
   getAppTheme,
   getEndlessQueueTracks,
   getAuthUser,
+  prefetchRelatedTracks,
 } from './services/musicService';
 import { subscribeToFirebaseAuthState } from './services/firebase';
 
@@ -261,6 +262,17 @@ export default function App() {
       audioEngine.warmYouTubeMatch(nextTrack);
     }
   }, [queue, queueIndex]);
+
+  /*
+   * Prefetch related tracks whenever the playing track changes so the
+   * endless queue serves songs related to what the user is listening to
+   * (same artist / genre) rather than random recently played songs.
+   */
+  useEffect(() => {
+    if (currentTrack && currentTrack.id !== 'default_now_playing') {
+      prefetchRelatedTracks(currentTrack);
+    }
+  }, [currentTrack]);
 
   /*
    * ------------------------------------------------------------
@@ -692,22 +704,21 @@ export default function App() {
         )}
       </main>
 
-      {!showNowPlayingModal && (
-        <MiniPlayer
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          onTogglePlay={togglePlay}
-          onOpenNowPlaying={() =>
-            setShowNowPlayingModal(true)
-          }
-          onOpenStudio={() =>
-            setCurrentTab('studio')
-          }
-          progressPercent={
-            progressPercent
-          }
-        />
-      )}
+      <MiniPlayer
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        onTogglePlay={togglePlay}
+        onOpenNowPlaying={() =>
+          setShowNowPlayingModal(true)
+        }
+        onOpenStudio={() =>
+          setCurrentTab('studio')
+        }
+        progressPercent={
+          progressPercent
+        }
+        hidden={showNowPlayingModal}
+      />
 
       {showNowPlayingModal && (
         <NowPlayingModal
@@ -778,6 +789,7 @@ export default function App() {
         currentTab={currentTab}
         onTabChange={(tab) => {
           setCurrentTab(tab);
+          setShowNowPlayingModal(false);
 
           window.scrollTo({
             top: 0,

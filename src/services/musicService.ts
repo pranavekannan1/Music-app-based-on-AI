@@ -432,6 +432,7 @@ export function reportPlay(track: Pick<Track, 'title' | 'artist'>): void {
 export async function findYouTubeMatches(
   track: Pick<Track, 'title' | 'artist' | 'durationSec'>
 ): Promise<string[]> {
+  // 1. First try server-side YouTube match endpoint
   try {
     const qs = new URLSearchParams({
       title: track.title,
@@ -439,18 +440,40 @@ export async function findYouTubeMatches(
       duration: String(Math.round(track.durationSec || 0)),
     });
     const res = await apiFetch(`/api/music/yt-match?${qs.toString()}`, {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(4500),
     });
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!data?.success || !Array.isArray(data.candidates)) return [];
-    return data.candidates
-      .map((c: { videoId?: string }) => c?.videoId)
-      .filter((id: unknown): id is string => typeof id === 'string' && /^[\w-]{11}$/.test(id));
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.candidates) && data.candidates.length > 0) {
+        const ids = data.candidates
+          .map((c: { videoId?: string }) => c?.videoId)
+          .filter((id: unknown): id is string => typeof id === 'string' && /^[\w-]{11}$/.test(id));
+        if (ids.length > 0) return ids;
+      }
+    }
   } catch (err) {
-    console.warn('YouTube match lookup failed:', err);
-    return [];
+    console.warn('Server YouTube match lookup skipped or timed out:', err);
   }
+
+  // 2. Client-side direct YouTube Data API fallback (instant & reliable)
+  try {
+    const cleanTitle = (track.title || '').replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
+    const cleanArtist = (track.artist || '').split(',')[0].trim();
+    const query = [cleanTitle, cleanArtist].filter(Boolean).join(' ');
+    if (query) {
+      const directResults = await searchYouTubeDirect(query, 6);
+      if (directResults.length > 0) {
+        const ids = directResults
+          .map((t) => t.id.replace(/^youtube_|^yt_/, ''))
+          .filter((id) => /^[\w-]{11}$/.test(id));
+        if (ids.length > 0) return ids;
+      }
+    }
+  } catch (err) {
+    console.warn('Direct YouTube search fallback error:', err);
+  }
+
+  return [];
 }
 
 /**
@@ -798,6 +821,7 @@ export function addToRecentlyPlayed(track: Track): void {
 }
 
 export function getUserPlaylists(): UserPlaylist[] {
+  // Existing implementation unchanged
   try {
     const raw = localStorage.getItem(USER_PLAYLISTS_KEY);
     if (raw) return JSON.parse(raw);
@@ -1087,16 +1111,69 @@ export function getTrackLyrics(track: Track): SongLyrics {
 }
 
 /**
- * Returns endless next tracks for non-stop continuous playback based on user taste & played songs
+ * Cached pool of related tracks fetched asynchronously based on the
+ * currently playing track.  `prefetchRelatedTracks` fills this, and
+ * `getEndlessQueueTracks` consumes from it so that the synchronous
+ * "song ended → what's next?" path never has to await a network call.
+ */
+let _relatedTrackPool: Track[] = [];
+let _relatedPoolSourceId: string | null = null;
+
+/**
+ * Call this whenever the current track changes.  It kicks off a
+ * background YouTube search for songs related to `current` (by
+ * artist + genre keywords) and stores the results so that
+ * `getEndlessQueueTracks` can pick them up later without blocking.
+ */
+export async function prefetchRelatedTracks(current: Track): Promise<void> {
+  if (!current?.title) return;
+  // Don't re-fetch if we already prefetched for this exact track
+  if (_relatedPoolSourceId === current.id && _relatedTrackPool.length > 0) return;
+  _relatedPoolSourceId = current.id;
+
+  try {
+    // Build a relevance-oriented query from the playing track's metadata
+    const artistPart = current.artist ? current.artist.split(',')[0].trim() : '';
+    const genrePart  = current.genre && !/latest|music|single/i.test(current.genre) ? current.genre : '';
+    const query = [artistPart, genrePart, 'songs'].filter(Boolean).join(' ');
+
+    const results = await searchYouTubeDirect(query, 15);
+    // Exclude the track itself
+    _relatedTrackPool = results.filter(t => t.id !== current.id && t.title !== current.title);
+  } catch {
+    _relatedTrackPool = [];
+  }
+}
+
+/**
+ * Returns endless next tracks for non-stop continuous playback.
+ *
+ * Priority order:
+ *   1. Pre-fetched related tracks (same artist / genre neighbourhood)
+ *   2. Recently played history (familiar songs the user already enjoyed)
+ *   3. Liked songs library
+ *
+ * Tracks already present in `currentQueue` are excluded.
  */
 export function getEndlessQueueTracks(currentQueue: Track[], count = 6): Track[] {
   const existingIds = new Set(currentQueue.map((t) => t.id));
+  const existingTitles = new Set(currentQueue.map((t) => t.title?.toLowerCase()));
+
+  const isDuplicate = (t: Track) =>
+    existingIds.has(t.id) || existingTitles.has(t.title?.toLowerCase());
+
+  // 1. Prefer the pre-fetched related pool (artist / genre based)
+  const related = _relatedTrackPool.filter((t) => !isDuplicate(t));
+  if (related.length >= count) {
+    return related.slice(0, count);
+  }
+
+  // 2. Fill remaining slots from recently played & liked songs
   const recentlyPlayed = getRecentlyPlayed();
   const liked = getLikedTracks();
+  const fallback = [...recentlyPlayed, ...liked].filter((t) => !isDuplicate(t) && !related.some(r => r.id === t.id));
 
-  // Filter available tracks not already in the active queue
-  const available = [...recentlyPlayed, ...liked].filter((t) => !existingIds.has(t.id));
-  return available.slice(0, count);
+  return [...related, ...fallback].slice(0, count);
 }
 
 // ==========================================
